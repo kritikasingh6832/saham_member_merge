@@ -1,0 +1,101 @@
+import React from 'react';
+import {render} from '../../../../../../testutils';
+import {blankMember} from "../../../../../../__mocks__/membersMock";
+import Continuation from "../../../../../../PageSearch/SearchResults/Components/Sections/Continuation";
+import {convertDateToMDY} from "../../../../../../hooks/Utility";
+import * as redux from 'react-redux';
+
+jest.setTimeout(300000);
+
+describe('Continuation', () => {
+    // @ts-ignore
+    const blank = blankMember.memberDetail.memberAffiliationList[0].continuationList;
+
+    const single = [
+        {
+            "continuationEventType": "8",
+            "continuationEventTypeDisplay": "Bankruptcy of Retire",
+            "qualifyingEventDate": "2024-05-30",
+            "continuationEffectiveDate": "2024-06-30",
+            "continuationExhaustionDate": "2024-07-30",
+            "dependentSubsAffiliationID": "1234567"
+        }
+    ];
+
+    const multiple = [
+        {
+            "continuationEventType": "8",
+            "continuationEventTypeDisplay": "Bankruptcy of Retire",
+            "qualifyingEventDate": "2024-05-30",
+            "continuationEffectiveDate": "2024-06-30",
+            "continuationExhaustionDate": "2024-07-30",
+            "dependentSubsAffiliationID": "1234567"
+        },
+        {
+            "continuationEventType": "2",
+            "continuationEventTypeDisplay": "Reduction work hours",
+            "qualifyingEventDate": "2023-05-30",
+            "continuationEffectiveDate": "2023-06-30",
+            "continuationExhaustionDate": "2023-07-30",
+            "dependentSubsAffiliationID": "7654321"
+        }
+    ];
+
+    test('No data - only field labels rendered', () => {
+        const spy = jest.spyOn(redux, 'useSelector');
+        spy.mockReturnValue(blank);
+
+        const baseDom = render(<Continuation />);
+
+        expect(baseDom.getByText('Qualifying Event Type:')).toBeInTheDocument();
+        expect(baseDom.getByText('Qualifying Event Date:')).toBeInTheDocument();
+        expect(baseDom.getByText('Family Member:')).toBeInTheDocument();
+        expect(baseDom.getByText('Continuation Effective Date:')).toBeInTheDocument();
+        expect(baseDom.getByText('Continuation Exhaustion Date:')).toBeInTheDocument();
+    });
+
+    test('Single Continuation', () => {
+        const spy = jest.spyOn(redux, 'useSelector')
+        spy.mockReturnValue(single)
+
+        const baseDom = render(<Continuation />);
+
+        expect(baseDom.getByText('Qualifying Event Type:')).toBeInTheDocument();
+        expect(baseDom.getByText(single[0].continuationEventTypeDisplay)).toBeInTheDocument();
+        expect(baseDom.getByText('Qualifying Event Date:')).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(single[0].qualifyingEventDate))).toBeInTheDocument();
+        expect(baseDom.getByText('Family Member:')).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(single[0].continuationEffectiveDate))).toBeInTheDocument();
+        expect(baseDom.getByText('Continuation Effective Date:')).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(single[0].continuationExhaustionDate))).toBeInTheDocument();
+        expect(baseDom.getByText('Continuation Exhaustion Date:')).toBeInTheDocument();
+        expect(baseDom.getByText(single[0].dependentSubsAffiliationID)).toBeInTheDocument();
+    });
+
+    test('Multiple Continuation', () => {
+        const spy = jest.spyOn(redux, 'useSelector');
+        spy.mockReturnValue(multiple);
+
+        const baseDom = render(<Continuation />);
+
+        expect(baseDom.getAllByText('Qualifying Event Type:'));
+        expect(baseDom.getByText(multiple[0].continuationEventTypeDisplay)).toBeInTheDocument();
+        expect(baseDom.getByText(multiple[1].continuationEventTypeDisplay)).toBeInTheDocument();
+
+        expect(baseDom.getAllByText('Qualifying Event Date:'));
+        expect(baseDom.getByText(convertDateToMDY(multiple[0].qualifyingEventDate))).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(multiple[1].qualifyingEventDate))).toBeInTheDocument();
+
+        expect(baseDom.getAllByText('Family Member:'));
+        expect(baseDom.getByText(convertDateToMDY(multiple[0].continuationEffectiveDate))).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(multiple[1].continuationEffectiveDate))).toBeInTheDocument();
+
+        expect(baseDom.getAllByText('Continuation Effective Date:'));
+        expect(baseDom.getByText(convertDateToMDY(multiple[0].continuationExhaustionDate))).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(multiple[1].continuationExhaustionDate))).toBeInTheDocument();
+
+        expect(baseDom.getAllByText('Continuation Exhaustion Date:'));
+        expect(baseDom.getByText(multiple[0].dependentSubsAffiliationID)).toBeInTheDocument();
+        expect(baseDom.getByText(multiple[1].dependentSubsAffiliationID)).toBeInTheDocument();
+    });
+});
