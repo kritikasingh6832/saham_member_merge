@@ -1,0 +1,43 @@
+import {MemberData} from "../PageSearch/SearchOptions/reducer";
+import {Continuation} from "../Types";
+import {blankMember} from "../__mocks__/membersMock";
+import {fillArrays} from "../hooks/fillArraysV2";
+import {priority} from "./SubsAffilation";
+import produce from "immer";
+
+
+const processContinuation = (state: MemberData) => {
+    // @ts-ignore
+    const blankTemplate: Continuation = blankMember.memberDetail.memberAffiliationList[0].continuationList[0];
+
+    const isEqual = (a: Continuation, b: Continuation): boolean => {
+        return a.continuationEffectiveDate === b.continuationEffectiveDate
+            && a.continuationExhaustionDate === b.continuationExhaustionDate
+            && a.continuationEventType === b.continuationEventType
+            && a.qualifyingEventDate === b.qualifyingEventDate;
+    }
+
+    const isBefore = (a: Continuation, b: Continuation): boolean => {
+        if (a.continuationEffectiveDate === b.continuationEffectiveDate) {
+            if (priority(a.continuationEventType) === priority(b.continuationEventType)) {
+                return a.qualifyingEventDate > b.qualifyingEventDate;
+            } else {
+                return priority(a.continuationEventType) > priority(b.continuationEventType);
+            }
+        } else {
+            return a.continuationEffectiveDate > b.continuationEffectiveDate;
+        }
+    }
+
+    const sourceData = state.source.memberDetail.memberAffiliationList[0].continuationList;
+    const targetData = state.target.memberDetail.memberAffiliationList[0].continuationList;
+    //@ts-ignore
+    const [s, t] = fillArrays<ContinuationType>('continuationList', [sourceData, targetData], blankTemplate, isEqual, isBefore, [], [], true, ['memberAffiliationList', 0]);
+
+    return produce(state, (draft: MemberData) => {
+        draft.source.memberDetail.memberAffiliationList[0].continuationList = s;
+        draft.target.memberDetail.memberAffiliationList[0].continuationList = t;
+    });
+}
+
+export default processContinuation;
