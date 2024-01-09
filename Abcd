@@ -1,0 +1,46 @@
+import processContinuation from './path-to-your-processContinuation'; // Update the path accordingly
+
+// Mock data for testing
+const mockState = {
+  source: {
+    memberDetail: {
+      memberAffiliationList: [
+        {
+          continuationList: [
+            {
+              continuationEffectiveDate: '2022-01-01',
+              continuationExhaustionDate: '2022-02-01',
+              continuationEventType: 'TypeA',
+              qualifyingEventDate: '2022-01-15',
+            },
+            // Add more continuations if needed
+          ],
+        },
+      ],
+    },
+  },
+  target: {
+    memberDetail: {
+      memberAffiliationList: [
+        {
+          continuationList: [
+            // Add continuations similar to the source for testing
+          ],
+        },
+      ],
+    },
+  },
+};
+
+// Your test case
+test('processContinuation updates continuation lists correctly', () => {
+  // Clone the mock state to avoid modifying the original data
+  const inputState = JSON.parse(JSON.stringify(mockState));
+
+  // Call the function with the test state
+  const updatedState = processContinuation(inputState);
+
+  // Assert that the continuation lists in the source and target have been updated
+  expect(updatedState.source.memberDetail.memberAffiliationList[0].continuationList).toEqual(/* expected value */);
+  expect(updatedState.target.memberDetail.memberAffiliationList[0].continuationList).toEqual(/* expected value */);
+});
