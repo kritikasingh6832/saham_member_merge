@@ -1,0 +1,152 @@
+import React from 'react';
+import {render} from '../../../../../../testutils';
+import SubscriberJob from "../../../../../../PageSearch/SearchResults/Components/Sections/SubscriberJob";
+import {blankMember} from "../../../../../../__mocks__/membersMock";
+import {convertDateToMDY} from "../../../../../../hooks/Utility";
+import * as redux from 'react-redux';
+
+jest.setTimeout(300000);
+
+describe('SubscriberJob', () => {
+    // @ts-ignore
+    const blank = blankMember.memberDetail.memberAffiliationList[0].subscriberJobList;
+
+    const single = [
+        {
+            "employStatusCode": null,
+            "employStatusCodeDisplay": "Active",
+            "employBeginDate": "2000-01-01",
+            "employClassCode": null,
+            "employClassCodeDisplay": "ClassCode",
+            "effectiveDate": "1980-01-01",
+            "expirationDate": "9999-01-01",
+            "retirementEffectiveDate": "2023-01-01",
+            "eligibilityBeginDate": "2001-01-01",
+            "eligibilityEndDate": "2020-01-01",
+            "employEndDate": "2021-01-01"
+        }
+    ];
+
+    const multiple = [
+        {
+            "employStatusCode": null,
+            "employStatusCodeDisplay": "Active",
+            "employBeginDate": "2001-01-01",
+            "employClassCode": null,
+            "employClassCodeDisplay": "ClassCode",
+            "effectiveDate": "1981-01-01",
+            "expirationDate": "10000-01-01",
+            "retirementEffectiveDate": "2024-01-01",
+            "eligibilityBeginDate": "2002-01-01",
+            "eligibilityEndDate": "2021-01-01",
+            "employEndDate": "2022-01-01"
+        },
+        {
+            "employStatusCode": null,
+            "employStatusCodeDisplay": "Inactive",
+            "employBeginDate": "2000-01-02",
+            "employClassCode": null,
+            "employClassCodeDisplay": "ClassCode2",
+            "effectiveDate": "1980-01-02",
+            "expirationDate": "9999-01-02",
+            "retirementEffectiveDate": "2023-01-02",
+            "eligibilityBeginDate": "2001-01-02",
+            "eligibilityEndDate": "2020-01-02",
+            "employEndDate": "2021-01-02"
+        }
+    ];
+
+    test('No data - only field labels rendered', () => {
+        const spy = jest.spyOn(redux, 'useSelector');
+        spy.mockReturnValue(blank);
+
+        const baseDom = render(<SubscriberJob />);
+
+        expect(baseDom.getByText('Effective Date:')).toBeInTheDocument();
+        expect(baseDom.getByText('Expiration Date:')).toBeInTheDocument();
+        expect(baseDom.getByText('Employment Status Code:')).toBeInTheDocument();
+        expect(baseDom.getByText('Employment Class Code:')).toBeInTheDocument();
+        expect(baseDom.getByText('Employment Begin Date:')).toBeInTheDocument();
+        expect(baseDom.getByText('Employment End Date:')).toBeInTheDocument();
+        expect(baseDom.getByText('Retirement Effective Date:')).toBeInTheDocument();
+        expect(baseDom.getByText('Eligibility Begin Date:')).toBeInTheDocument();
+        expect(baseDom.getByText('Eligibility End Date:')).toBeInTheDocument();
+    });
+
+    test('Single subscriber job', () => {
+        const spy = jest.spyOn(redux, 'useSelector');
+        spy.mockReturnValue(single);
+
+        const baseDom = render(<SubscriberJob />);
+
+        expect(baseDom.getByText('Effective Date:')).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(single[0].effectiveDate))).toBeInTheDocument();
+
+        expect(baseDom.getByText('Expiration Date:')).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(single[0].expirationDate))).toBeInTheDocument();
+
+        expect(baseDom.getByText('Employment Status Code:')).toBeInTheDocument();
+        expect(baseDom.getByText(single[0].employStatusCodeDisplay)).toBeInTheDocument();
+
+        expect(baseDom.getByText('Employment Class Code:')).toBeInTheDocument();
+        expect(baseDom.getByText(single[0].employClassCodeDisplay)).toBeInTheDocument();
+
+        expect(baseDom.getByText('Employment Begin Date:')).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(single[0].employBeginDate))).toBeInTheDocument();
+
+        expect(baseDom.getByText('Employment End Date:')).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(single[0].employEndDate))).toBeInTheDocument();
+
+        expect(baseDom.getByText('Retirement Effective Date:')).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(single[0].retirementEffectiveDate))).toBeInTheDocument();
+
+        expect(baseDom.getByText('Eligibility Begin Date:')).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(single[0].eligibilityBeginDate))).toBeInTheDocument();
+
+        expect(baseDom.getByText('Eligibility End Date:')).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(single[0].eligibilityEndDate))).toBeInTheDocument();
+    });
+
+    test('Multiple subscriber jobs', () => {
+        const spy = jest.spyOn(redux, 'useSelector');
+        spy.mockReturnValue(multiple);
+
+        const baseDom = render(<SubscriberJob />);
+
+        baseDom.getAllByText('Effective Date:');
+        expect(baseDom.getByText(convertDateToMDY(multiple[0].effectiveDate))).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(multiple[1].effectiveDate))).toBeInTheDocument();
+
+        baseDom.getAllByText('Expiration Date:');
+        expect(baseDom.getByText(convertDateToMDY(multiple[0].expirationDate))).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(multiple[1].expirationDate))).toBeInTheDocument();
+
+        baseDom.getAllByText('Employment Status Code:');
+        expect(baseDom.getByText(multiple[0].employStatusCodeDisplay)).toBeInTheDocument();
+        expect(baseDom.getByText(multiple[0].employStatusCodeDisplay)).toBeInTheDocument();
+
+        baseDom.getAllByText('Employment Class Code:');
+        expect(baseDom.getByText(multiple[0].employClassCodeDisplay)).toBeInTheDocument();
+        expect(baseDom.getByText(multiple[0].employClassCodeDisplay)).toBeInTheDocument();
+
+        baseDom.getAllByText('Employment Begin Date:');
+        expect(baseDom.getByText(convertDateToMDY(multiple[0].employBeginDate))).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(multiple[1].employBeginDate))).toBeInTheDocument();
+
+        baseDom.getAllByText('Employment End Date:');
+        expect(baseDom.getByText(convertDateToMDY(multiple[0].employEndDate))).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(multiple[1].employEndDate))).toBeInTheDocument();
+
+        baseDom.getAllByText('Retirement Effective Date:');
+        expect(baseDom.getByText(convertDateToMDY(multiple[0].retirementEffectiveDate))).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(multiple[1].retirementEffectiveDate))).toBeInTheDocument();
+
+        baseDom.getAllByText('Eligibility Begin Date:');
+        expect(baseDom.getByText(convertDateToMDY(multiple[0].eligibilityBeginDate))).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(multiple[1].eligibilityBeginDate))).toBeInTheDocument();
+
+        baseDom.getAllByText('Eligibility End Date:');
+        expect(baseDom.getByText(convertDateToMDY(multiple[0].eligibilityEndDate))).toBeInTheDocument();
+        expect(baseDom.getByText(convertDateToMDY(multiple[1].eligibilityEndDate))).toBeInTheDocument();
+    });
+});
