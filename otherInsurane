@@ -1,0 +1,45 @@
+import {MemberData} from "../PageSearch/SearchOptions/reducer";
+import {Cob} from "../Types";
+import {blankMember} from "../__mocks__/membersMock";
+import {fillArrays} from "../hooks/fillArraysV2";
+import produce from "immer";
+
+const processOtherInsurance = (state: MemberData) => {
+    // @ts-ignore
+    const blankTemplate: Cob = blankMember.memberDetail.cobList[0];
+
+    const isEqual = (a: Cob, b: Cob): boolean => {
+        return a.effectiveDate === b.effectiveDate && a.benefitType === b.benefitType;
+    }
+
+    const isBefore = (a: Cob, b: Cob): boolean => {
+        const priority = (benefitType: string) => {
+            switch (benefitType) {
+                case "MD":  return 5;  // Medical Insurance
+                case "RX":  return 4;  // RX Insurance
+                case "DN":  return 3;  // Dental
+                case "VS":  return 2;  // Vision
+                case "BR":  return 1;  // Benefit Rider
+                default:    return 0;
+            }
+        }
+
+        if (a.effectiveDate === b.effectiveDate) {
+            return priority(a.benefitType) > priority(b.benefitType)
+        } else {
+            return a.effectiveDate > b.effectiveDate
+        }
+    }
+
+    const sourceData = state.source.memberDetail.cobList;
+    const targetData = state.target.memberDetail.cobList;
+
+    const [s, t] = fillArrays<Cob>('cobList', [sourceData, targetData], blankTemplate, isEqual, isBefore, [], [], true);
+
+    return produce(state, (draft: MemberData) => {
+        draft.source.memberDetail.cobList = s;
+        draft.target.memberDetail.cobList = t;
+    });
+}
+
+export default processOtherInsurance;
