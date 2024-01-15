@@ -1,0 +1,67 @@
+import {MemberData} from "../PageSearch/SearchOptions/reducer";
+import {Address, OtherContact} from "../Types";
+import {blankMember} from "../__mocks__/membersMock";
+import {fillArrays} from "../hooks/fillArraysV2";
+import {addressTypePriority, ecommEqFn, ecommSortFn, languageEqFn, languageSortFn, phoneEqFn, phoneSortFn, syncNumberOfAddressLinesToRender} from "./ContactInfo";
+import produce from "immer";
+
+const processOtherContacts = (state: MemberData) => {
+    // @ts-ignore
+    const blankTemplate = blankMember.memberDetail.otherContactList[0];
+    const sourceOtherContacts = state.source.memberDetail.otherContactList;
+    const targetOtherContacts = state.target.memberDetail.otherContactList;
+
+    const isEqual = (a: OtherContact, b: OtherContact) => {
+        return a.memEntityIDCode === b.memEntityIDCode && a.effectiveDate === b.effectiveDate;
+    }
+
+    const isBefore = (a: OtherContact, b: OtherContact) => {
+        const priority = (memEntityIDCode: string) => {
+            switch (memEntityIDCode) {
+                case 'S3':   return 14;  // Custodial Parent
+                case 'X4':   return 13;  // Spouse
+                case 'GB':   return 12;  // Other Insured
+                case 'GD':   return 11;  // Guardian
+                case 'S1':   return 10;  // Parent
+                case 'E1':   return 9;   // Authorized Rep
+                case '6Y':   return 8;   // Case Manager
+                case '9K':   return 7;   // Key Person
+                case 'EI':   return 6;   // Executor of Estate
+                case 'EXS':  return 5;   // Ex-spouse
+                case 'J6':   return 4;   // Power of Attorney
+                case 'LR':   return 3;   // Legal Rep
+                case 'QD':   return 2;   // Responsible Party
+                case 'TZ':   return 1;   // Significant Other
+                default:     return 0;
+            }
+        }
+
+        if (priority(a.memEntityIDCode) === priority(b.memEntityIDCode)) {
+            return a.effectiveDate > b.effectiveDate;
+        } else {
+            return priority(a.memEntityIDCode) > priority(b.memEntityIDCode);
+        }
+    }
+
+    const addressEqFn = (a: Address, b: Address): boolean => {
+        return a.addressType === b.addressType;
+    }
+
+    const addressSortFn = (a: Address, b: Address): boolean => {
+        return addressTypePriority(a.addressType) > addressTypePriority(b.addressType);
+    }
+
+    const [s, t] = fillArrays('otherContacts', [sourceOtherContacts, targetOtherContacts], blankTemplate, isEqual, isBefore, [
+        {key: 'addressList',    eqFn: addressEqFn,   sortFn: addressSortFn, rowMappers: [syncNumberOfAddressLinesToRender]},
+        {key: 'phoneList',      eqFn: phoneEqFn,     sortFn: phoneSortFn},
+        {key: 'ecommList',      eqFn: ecommEqFn,     sortFn: ecommSortFn},
+        {key: 'languageList',   eqFn: languageEqFn,  sortFn: languageSortFn}
+    ], [], true);
+
+    return produce(state, (draft: MemberData) => {
+        draft.source.memberDetail.otherContactList = s;
+        draft.target.memberDetail.otherContactList = t;
+    });
+}
+
+export default processOtherContacts;
