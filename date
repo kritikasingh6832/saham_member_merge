@@ -1,0 +1,82 @@
+import React from "react";
+import {Form} from "antd";
+import moment from "moment";
+import RangePicker from "../../../RangePicker";
+import {DATE_DISPLAY_FORMAT} from "../../../constants";
+
+const DateRange = () => {
+    return (
+        <Form.Item label='Date Range'
+                   name='dateRange'
+                   required
+                   dependencies={['category', 'memGroupID', 'memberID']}
+                   rules={[
+
+                       ({getFieldValue}) => ({
+                           validator(_, value) {
+                               if (!value || !value[0] || !value[1]) {
+                                   return Promise.reject("Please enter both a Start and End Date");
+                               }
+                               if (value && !getFieldValue('memGroupID') && !getFieldValue('memberID') && getFieldValue('category')?.length > 1) {
+                                   return validateGroupCategory7DayRange(value);
+                               }
+                               if (value && getFieldValue('memGroupID') && !getFieldValue('memberID') && (!getFieldValue('category') || getFieldValue('category') !== "")) {
+                                   return validateGroupCategory7DayRange(value);
+                               } else {
+                                   return validateGroupCategory31DayRange(value);
+                               }
+                           }
+                       })
+                   ]}>
+
+            <RangePicker separator="to"
+                         format={DATE_DISPLAY_FORMAT}
+                         ranges={{
+                             'Today': () => {
+                                 return [moment(), moment()]
+                             },
+                             'Last 7 days': () => {
+                                 return [moment().subtract(7, 'day'), moment()]
+                             },
+                             'Last 31 days': () => {
+                                 return [moment().subtract(30, 'day'), moment()]
+                             },
+                             'This Week': () => {
+                                 return [moment().startOf('week'), moment().endOf('week')]
+                             },
+                             'Last Week': () => {
+                                 return [moment().subtract(1, 'week').startOf('week'), moment().subtract(1, 'week').endOf('week')]
+                             },
+                             'This Month': () => {
+                                 return [moment().startOf('month'), moment().endOf('month')]
+                             },
+                             'Last Month': () => {
+                                 return [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+                             }
+                         }}
+            />
+        </Form.Item>
+    );
+}
+
+function validateGroupCategory7DayRange(value: any) {
+    const fromDate = value[0];
+    const toDate = value[1];
+    if (toDate.diff(fromDate, 'day') > 6) {
+        return Promise.reject("Member Group or Category selection requires a limited date range of 7 days or less.");
+    } else {
+        return Promise.resolve();
+    }
+}
+
+function validateGroupCategory31DayRange(value: any) {
+    const fromDate = value[0];
+    const toDate = value[1];
+    if (toDate.diff(fromDate, 'day') > 30) {
+        return Promise.reject("Please enter a Date Range of no more than 31 days.");
+    } else {
+        return Promise.resolve();
+    }
+}
+
+export default DateRange;
