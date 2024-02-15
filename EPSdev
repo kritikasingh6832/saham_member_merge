@@ -1,0 +1,99 @@
+package com.optum.cirrus.isl.contractoptions.component
+
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.github.tomakehurst.wiremock.WireMockServer
+import com.github.tomakehurst.wiremock.client.WireMock
+import com.optum.cirrus.isl.contractoptions.model.inbound.v3.EnrollAttribDerivSchedDto
+import com.optum.cirrus.isl.contractoptions.model.inbound.v3.MemberGroupEPSDerivSchedResponse
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.ResultActions
+import spock.lang.Shared
+import spock.lang.Specification
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
+
+@SpringBootTest
+@AutoConfigureMockMvc(addFilters = false)
+class EPSDerivationSpec extends Specification {
+
+    @Autowired
+    MockMvc mockMvc
+
+    @Shared
+    WireMockServer mockServer
+
+    def setupSpec() {
+        mockServer = new WireMockServer()
+        WireMock.configureFor("localhost", 8080)
+        mockServer.start()
+    }
+
+    def "Test EPS Derivation Schedule"() {
+        given:
+        ObjectMapper objectMapper = new ObjectMapper();
+        MemberGroupEPSDerivSchedResponse mockedResponse = getMockedResponse()
+
+        WireMock.stubFor(WireMock.get(
+                WireMock.urlMatching("/api/v3/membergroupepsderivsched/memgroup/4524352\\?enrollmentSource=RTSC&fromDate")
+        )
+                .willReturn(WireMock.aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(objectMapper.writeValueAsString(mockedResponse))));
+
+        when: "calling the service"
+        ResultActions resultActions = mockMvc.perform(
+                get("/cirrus/v1.0/epsDerivation/{memberGroupId}", "4524352")
+                        .param("enrollmentSource", "RTSC")
+        )
+
+        then:
+        resultActions
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/json"))
+                .andExpect(jsonPath("enrollAttribDerivSchedList[0].effectiveDate").exists())
+                .andExpect(jsonPath("enrollAttribDerivSchedList[0].expirationDate").exists())
+    }
+
+    def "Test EPS Derivation Schedule, without sending MemberGrupID and EnrollmentSource"() {
+        when: "calling the service"
+        ResultActions resultActions = mockMvc.perform(get("/cirrus/v1.0/epsDerivation"))
+
+        then:
+        resultActions.andExpect(status().isNotFound())
+    }
+
+    def "Test EPS Derivation Schedule with wrong enrollment Source"() {
+        when: "calling the service"
+        ResultActions resultActions = mockMvc.perform(
+                get("/cirrus/v1.0/epsDerivation/{memberGroupId}", "4524352")
+                        .param("enrollmentSource", "BNE")
+        )
+
+        then:
+        resultActions.andExpect(status().isNotFound())
+    }
+
+    def cleanupSpec() {
+        mockServer.stop()
+    }
+
+    def getMockedResponse() {
+        MemberGroupEPSDerivSchedResponse memberGroupEPSDerivSchedResponse = new MemberGroupEPSDerivSchedResponse()
+        memberGroupEPSDerivSchedResponse.setMemberGroupID(132431241324l)
+        EnrollAttribDerivSchedDto enrollAttribDerivSchedDto = new EnrollAttribDerivSchedDto()
+        enrollAttribDerivSchedDto.setEffectiveDate(new Date())
+        enrollAttribDerivSchedDto.setExpirationDate(new Date())
+        List<EnrollAttribDerivSchedDto> enrollAttribDerivSchedDtoList = new ArrayList<>()
+        enrollAttribDerivSchedDtoList.add(enrollAttribDerivSchedDto)
+        memberGroupEPSDerivSchedResponse.setEnrollAttribDerivSchedList(enrollAttribDerivSchedDtoList)
+
+        return memberGroupEPSDerivSchedResponse
+    }
+}
