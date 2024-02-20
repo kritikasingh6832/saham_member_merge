@@ -1,0 +1,143 @@
+package com.optum.cirrus.member.editschedule.controller.v1;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.optum.cirrus.member.editschedule.businesslogic.EditSched;
+import com.optum.cirrus.member.editschedule.businesslogic.EditSchedDetail;
+import com.optum.cirrus.member.editschedule.businesslogic.member.MemberEditCode;
+import com.optum.cirrus.member.editschedule.config.LocalDateAdapter;
+import com.optum.cirrus.member.editschedule.constants.EditSchedReferenceConstants;
+import com.optum.cirrus.member.editschedule.data.dto.ErrorAttributionRequestDto;
+import com.optum.cirrus.member.editschedule.data.dto.ErrorAttributionResponseDto;
+import com.optum.cirrus.member.editschedule.data.dto.member.MemberEditCodeDto;
+import com.optum.cirrus.member.editschedule.data.valueobject.EditSchedDetailVO;
+import com.optum.cirrus.member.editschedule.data.valueobject.EditSchedVO;
+import com.optum.cirrus.member.editschedule.data.valueobject.member.MemberEditCodeVO;
+import com.optum.cirrus.member.editschedule.service.EditErrorAttribution;
+import com.optum.cirrus.member.editschedule.service.impl.EnableErrorAttributionToggle;
+import com.optum.cirrus.member.editschedule.transformer.response.ErrorAttributionResponseTransformer;
+import com.optum.cirrus.member.editschedule.transformer.response.member.MemberEditCodeResponseTransformer;
+import com.optum.cirrus.metrics.micrometer.annotations.SLA;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/cirrus/v1.0/errorAttribution")
+@Slf4j
+public class ErrorAttributionController {
+
+    @Autowired
+    private MemberEditCode memberEditCode;
+
+    @Autowired
+    private EditSched editSched;
+
+    @Autowired
+    private EditSchedDetail editSchedDetail;
+
+    @Autowired
+    private ErrorAttributionResponseTransformer errorAttributionResponseTransformer;
+
+    @Autowired
+    private MemberEditCodeResponseTransformer memberEditCodeResponseTransformer;
+
+    @Autowired
+    private EditErrorAttribution editErrorAttribution;
+
+    @Autowired
+    private EnableErrorAttributionToggle errorAttributionToggleEnabled;
+
+    private static final Gson gson = new GsonBuilder()
+            .registerTypeAdapter(LocalDate.class, new LocalDateAdapter().nullSafe())
+            .create();
+
+    /**
+     * Get Error Attribution  - Edit Schedule
+     */
+    @SLA(5000)
+    @PostMapping(path = "/list", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<List<ErrorAttributionResponseDto>> listErrorAttribution(@RequestBody ErrorAttributionRequestDto errorAttrRequestDto) {
+        log.info("Received listErrorAttribution request. |errorAttrRequestDto={}  ", gson.toJson(errorAttrRequestDto));
+        List<EditSchedDetailVO> editSchedDetailVOs = null;
+        if (Objects.nonNull(errorAttrRequestDto) && StringUtils.isNotEmpty(errorAttrRequestDto.getPropertyKey())) {
+            List<MemberEditCodeVO> memberEditCodeVOList = memberEditCode.listMemberEditCode(
+                    errorAttrRequestDto.getPropertyKey(),
+                    errorAttrRequestDto.getEditEntityName(),
+                    errorAttrRequestDto.getEditEntityFieldName(),
+                    errorAttrRequestDto.getTransactionDate());
+            List<Long> memberEditCodeIDs = CollectionUtils.emptyIfNull(memberEditCodeVOList).stream()
+                    .map(MemberEditCodeVO::getMemberEditCodeID)
+                    .collect(Collectors.toList());
+
+            if (CollectionUtils.isNotEmpty(memberEditCodeIDs)) {
+                editSchedDetailVOs = getEditSchedDetailsByEditSchedID(errorAttrRequestDto, memberEditCodeIDs);
+            } else {
+                if (errorAttributionToggleEnabled.isErrorAttributionToggleEnabled()) {
+                    editErrorAttribution.saveMissingErrorAttribution(errorAttrRequestDto);
+                }
+            }
+        }
+        return ResponseEntity.ok(editSchedDetailVOs != null ? errorAttributionResponseTransformer.transform(editSchedDetailVOs) : null);
+    }
+
+    private List<EditSchedDetailVO> getEditSchedDetailsByEditSchedID(ErrorAttributionRequestDto errorAttrRequestDto, List<Long> memberEditCodeIDs) {
+        List<EditSchedDetailVO> editSchedDetailVOs = null;
+        if (StringUtils.isNotEmpty(errorAttrRequestDto.getEditSchedID())) {
+            Optional<EditSchedVO> editSchedVO = editSched.read(errorAttrRequestDto.getEditSchedID(), errorAttrRequestDto.getTransactionDate());
+            if (editSchedVO.isPresent()) {
+                editSchedDetailVOs = editSchedDetail.list(
+                        editSchedVO.get().getEditSchedVersionID(),
+                        memberEditCodeIDs,
+                        errorAttrRequestDto.getTransactionDate());
+
+                if (CollectionUtils.isEmpty(editSchedDetailVOs) && EditSchedReferenceConstants.SCHED_TYPE_MEMBER_GROUP.equalsIgnoreCase(editSchedVO.get().getSchedType())) {
+                    editSchedDetailVOs = getEditSchedDetailsBySystemEditSchedID(errorAttrRequestDto, editSchedVO.get().getSystemEditSchedID(), memberEditCodeIDs);
+                }
+            }
+        }
+        return editSchedDetailVOs;
+    }
+
+    private List<EditSchedDetailVO> getEditSchedDetailsBySystemEditSchedID(ErrorAttributionRequestDto errorAttrRequestDto, String systemEditSchedID, List<Long> memberEditCodeIDs) {
+        List<EditSchedDetailVO> editSchedDetailVOs = null;
+        Optional<EditSchedVO> systemEditShedVO = editSched.read(systemEditSchedID, errorAttrRequestDto.getTransactionDate());
+        if (systemEditShedVO.isPresent()) {
+            editSchedDetailVOs = editSchedDetail.list(
+                    systemEditShedVO.get().getEditSchedVersionID(),
+                    memberEditCodeIDs,
+                    errorAttrRequestDto.getTransactionDate());
+        }
+        return editSchedDetailVOs;
+    }
+
+    /**
+     * Get Edit Category
+     */
+    @SLA(5000)
+    @PostMapping(path = "/editCategory", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<MemberEditCodeDto> getEditCategory(@RequestBody MemberEditCodeDto memberEditCodeDto) {
+        log.info("Received getEditCategory request. |memberEditCodeDto={}  ", gson.toJson(memberEditCodeDto));
+        if (Objects.nonNull(memberEditCodeDto) && StringUtils.isNotEmpty(memberEditCodeDto.getPropertyKey())) {
+            List<MemberEditCodeVO> memberEditCodeVOList = memberEditCode.listMemberEditCode(memberEditCodeDto.getPropertyKey(), memberEditCodeDto.getEditEntityName(),
+                    memberEditCodeDto.getEditEntityFieldName(), LocalDate.now());
+            if (CollectionUtils.isNotEmpty(memberEditCodeVOList)) {
+                return ResponseEntity.ok(memberEditCodeResponseTransformer.transform(memberEditCodeVOList.get(0)));
+            }
+        }
+        return ResponseEntity.ok(null);
+    }
+}
