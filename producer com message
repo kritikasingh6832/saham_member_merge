@@ -344,3 +344,16 @@ public class ProducerCompMessageTransformerImpl implements ProducerCompMessageTr
         return null;
     }
 }
+
+
+
+
+
+Description:
+
+As a process, when the AOR feed is sent from Basics and the memGroupContractProducer record is being re-created using the information passed in the AOR feed, when a single sysBillingDefaultValue record cannot be identified, Cirrus will now log a meaningful error in the Member Group Error Queue and the PSA Scheduled Job (which processes and creates the memGroupContractProducer records) will continue processing any remaining producer updates received from basics.
+Add new error to the bb_message table:
+
+ERRXXXXXX: Member Group ID (0): Producer billing Schedule failed to be created.  A billing default value record must exist with input carrierID '{1}', rating state '{2}', revenue arrangement '{3}', contract option type '{4}', effective date '{5}', and billing calculation method '{6}'.Throw the above error when the PSA Scheduled Job is run (runs as part of the AOR feed) and a single sysBillingDefaultValue record could not be identified when creating the billingSched.
+
+Log the error to the Member Group Error Queue with transaction type "Contract Producer Update".When the above error is encountered, enhance PSA scheduled Job so that it continues processing any other producer updates.
