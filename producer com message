@@ -1,0 +1,346 @@
+package com.optum.cirrus.legacy.core.messaging.inbound.membergroup.service.impl;
+
+import com.optum.cirrus.legacy.api.constants.ReferenceConstants;
+import com.optum.cirrus.legacy.core.benefit.businesslogic.BenefitPlan;
+import com.optum.cirrus.legacy.core.benefit.data.BenefitPlanVO;
+import com.optum.cirrus.legacy.core.benefitBundle.businesslogic.BenefitBundlePlan;
+import com.optum.cirrus.legacy.core.benefitBundle.data.BenefitBundlePlanVO;
+import com.optum.cirrus.legacy.core.membergroup.businesslogic.service.producercomp.ProducerCompGlobalDataAddService;
+import com.optum.cirrus.legacy.core.membergroup.contract.affil.businesslogic.MemGroupContractAffil;
+import com.optum.cirrus.legacy.core.membergroup.contract.affil.data.MemGroupContractAffilVO;
+import com.optum.cirrus.legacy.core.membergroup.contract.businesslogic.MemGroupContractOpt;
+import com.optum.cirrus.legacy.core.membergroup.contract.businesslogic.MemGroupContractPlanOption;
+import com.optum.cirrus.legacy.core.membergroup.contract.data.MemGroupContractOptVO;
+import com.optum.cirrus.legacy.core.membergroup.contract.data.MemGroupContractPlanOptionVO;
+import com.optum.cirrus.legacy.core.membergroup.data.MemGroupContractProducerVO;
+import com.optum.cirrus.legacy.core.messaging.inbound.membergroup.data.ProducerCompContractProducerDto;
+import com.optum.cirrus.legacy.core.messaging.inbound.membergroup.data.ProducerCompProducerDto;
+import com.optum.cirrus.legacy.core.messaging.inbound.membergroup.service.ProducerCompMessageTransformer;
+import com.optum.cirrus.legacy.core.properties.MemberGroupMessages;
+import com.optum.cirrus.legacy.core.sales.businesslogic.ProducerExternalID;
+import com.optum.cirrus.legacy.core.sales.data.ProducerExternalIDVO;
+import com.optum.cirrus.legacy.core.settings.businesslogic.SysFinSetting;
+import com.optum.cirrus.legacy.core.settings.data.SysFinSettingVO;
+import com.optum.cirrus.legacy.core.system.businesslogic.SysBillingDefaultValue;
+import com.optum.cirrus.legacy.core.system.data.SysBillingDefaultValueVO;
+import com.optum.ocf.core.util.Decimal2;
+import com.optum.ocf.dao.data.message.Message;
+import com.optum.ocf.dao.exception.UhgRuntimeException;
+import com.optum.ocf.dao.util.UhgCalendarUtilities;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.sql.Date;
+import java.util.ArrayList;
+import java.util.List;
+
+public class ProducerCompMessageTransformerImpl implements ProducerCompMessageTransformer {
+
+    private final Logger logger = LoggerFactory.getLogger(ProducerCompMessageTransformerImpl.class);
+
+    private ProducerCompGlobalDataAddService producerCompGlobalDataAddService;
+    private ProducerExternalID producerExternalID;
+    private SysFinSetting sysFinSetting;
+    private MemGroupContractAffil memGroupContractAffil;
+    private SysBillingDefaultValue sysBillingDefaultValue;
+    private BenefitBundlePlan benefitBundlePlan;
+    private BenefitPlan benefitPlan;
+    private MemGroupContractOpt memGroupContractOpt;
+    private MemGroupContractPlanOption memGroupContractPlanOption;
+
+    public final void setRequiredMemGroupContractAffil(MemGroupContractAffil memGroupContractAffil) {
+        this.memGroupContractAffil = memGroupContractAffil;
+    }
+
+    public final void setRequiredSysBillingDefaultValue(SysBillingDefaultValue sysBillingDefaultValue) {
+        this.sysBillingDefaultValue = sysBillingDefaultValue;
+    }
+
+    public final void setRequiredBenefitBundlePlan(BenefitBundlePlan benefitBundlePlan) {
+        this.benefitBundlePlan = benefitBundlePlan;
+    }
+
+    public final void setRequiredBenefitPlan(BenefitPlan benefitPlan) {
+        this.benefitPlan = benefitPlan;
+    }
+
+    public final void setRequiredMemGroupContractOpt(MemGroupContractOpt memGroupContractOpt) {
+        this.memGroupContractOpt = memGroupContractOpt;
+    }
+
+    public final void setRequiredMemGroupContractPlanOption(MemGroupContractPlanOption memGroupContractPlanOption) {
+        this.memGroupContractPlanOption = memGroupContractPlanOption;
+    }
+
+    public final void setRequiredProducerCompGlobalDataAddService(ProducerCompGlobalDataAddService producerCompGlobalDataAddService) {
+        this.producerCompGlobalDataAddService = producerCompGlobalDataAddService;
+    }
+
+    public void setRequiredProducerExternalID(ProducerExternalID producerExternalID) {
+        this.producerExternalID = producerExternalID;
+    }
+
+    public final void setRequiredSysFinSetting(SysFinSetting sysFinSetting) {
+        this.sysFinSetting = sysFinSetting;
+    }
+
+    @Override
+    public List<MemGroupContractProducerVO> createInheritingMemGroupContractProducerList(long memGroupID, long memGroupContractID,
+                                                                                         ProducerCompContractProducerDto producerCompContractProducerDto) {
+        SysFinSettingVO sysFinSettingVO = sysFinSetting.read();
+        List<MemGroupContractProducerVO> memGroupContractProducerVOs = new ArrayList<>();
+        List<ProducerCompProducerDto> producerCompProducerDtos = producerCompContractProducerDto.getProducerCompProducers();
+
+        for (ProducerCompProducerDto producerCompProducerDto : producerCompProducerDtos) {
+
+            Date expirationDate = StringUtils.isBlank(producerCompProducerDto.getExpirationDate()) ?
+                    UhgCalendarUtilities.DEFAULT_TERMINATION_DATE : UhgCalendarUtilities.getSQLDate(producerCompProducerDto.getExpirationDate());
+            List<MemGroupContractAffilVO> memGroupContractAffilVOList = memGroupContractAffil.listActiveByMemGroupIDContractIDOverlappingDates(memGroupID, memGroupContractID,
+                    UhgCalendarUtilities.getSQLDate(producerCompProducerDto.getEffectiveDate()), expirationDate);
+
+            for (MemGroupContractAffilVO memGroupContractAffilVO : memGroupContractAffilVOList) {
+                String billingSchedID = null;
+                if (StringUtils.equals(producerCompContractProducerDto.getCompensationType(), ReferenceConstants.COMPENSATIONTYPE_SERVICE_FEE)) {
+                    validateBillingCalcMethod(producerCompProducerDto);
+                    validateMessageFields(producerCompProducerDto);
+                    SysBillingDefaultValueVO sysBillingDefaultValueVO = getSysBillingDefaultValue(
+                            memGroupID, memGroupContractID,
+                            producerCompContractProducerDto, producerCompProducerDto
+                    );
+                    billingSchedID = producerCompGlobalDataAddService.createBillingScheduleForProducer(sysBillingDefaultValueVO, producerCompProducerDto);
+                }
+                MemGroupContractProducerVO memGroupContractProducerVO = createInheritingMemGroupContractProducer(
+                        memGroupContractID,
+                        billingSchedID,
+                        sysFinSettingVO,
+                        producerCompContractProducerDto,
+                        producerCompProducerDto,
+                        memGroupContractAffilVO);
+                memGroupContractProducerVOs.add(memGroupContractProducerVO);
+            }
+        }
+
+        return memGroupContractProducerVOs;
+    }
+
+    @Override
+    public List<MemGroupContractProducerVO> createMemGroupContractProducerList(long memGroupID, long memGroupContractID,
+                                                                               ProducerCompContractProducerDto producerCompContractProducerDto) {
+        SysFinSettingVO sysFinSettingVO = sysFinSetting.read();
+        List<MemGroupContractProducerVO> memGroupContractProducerVOs = new ArrayList<>();
+        List<ProducerCompProducerDto> producerCompProducerDtos = producerCompContractProducerDto.getProducerCompProducers();
+
+        for (ProducerCompProducerDto producerCompProducerDto : producerCompProducerDtos) {
+            String billingSchedID = null;
+            if (StringUtils.equals(producerCompContractProducerDto.getCompensationType(), ReferenceConstants.COMPENSATIONTYPE_SERVICE_FEE)) {
+                validateBillingCalcMethod(producerCompProducerDto);
+                validateMessageFields(producerCompProducerDto);
+                SysBillingDefaultValueVO sysBillingDefaultValueVO = getSysBillingDefaultValue(
+                        memGroupID, memGroupContractID,
+                        producerCompContractProducerDto, producerCompProducerDto
+                );
+                billingSchedID = producerCompGlobalDataAddService.createBillingScheduleForProducer(sysBillingDefaultValueVO, producerCompProducerDto);
+            }
+            MemGroupContractProducerVO memGroupContractProducerVO = createMemGroupContractProducer(
+                    memGroupID,
+                    memGroupContractID,
+                    billingSchedID,
+                    sysFinSettingVO,
+                    producerCompContractProducerDto,
+                    producerCompProducerDto);
+            memGroupContractProducerVOs.add(memGroupContractProducerVO);
+        }
+        return memGroupContractProducerVOs;
+    }
+
+    private MemGroupContractProducerVO createMemGroupContractProducer(long memGroupID,
+                                                                      long memGroupContractID,
+                                                                      String billingSchedID,
+                                                                      SysFinSettingVO sysFinSettingVO,
+                                                                      ProducerCompContractProducerDto producerCompContractProducerDto,
+                                                                      ProducerCompProducerDto producerCompProducerDto) {
+
+        MemGroupContractProducerVO memGroupContractProducerVO = new MemGroupContractProducerVO();
+        memGroupContractProducerVO.setMemGroupID(memGroupID);
+        memGroupContractProducerVO.setMemGroupContractID(memGroupContractID);
+
+        memGroupContractProducerVO.setCompensationType(producerCompContractProducerDto.getCompensationType());
+        memGroupContractProducerVO.setProductType(producerCompContractProducerDto.getProductType());
+        memGroupContractProducerVO.setContractOptType(producerCompContractProducerDto.getContractOptType());
+
+        if (StringUtils.equals(producerCompContractProducerDto.getCompensationType(), ReferenceConstants.COMPENSATIONTYPE_SERVICE_FEE)) {
+            setCompTypeServiceFeeFields(memGroupContractProducerVO,
+                    billingSchedID,
+                    sysFinSettingVO.getServiceFeeBillItemType(),
+                    producerCompContractProducerDto,
+                    producerCompProducerDto);
+        }
+        memGroupContractProducerVO.setProducerType(producerCompProducerDto.getProducerType());
+
+        memGroupContractProducerVO.setProducerID(getProducerID(
+                producerCompProducerDto.getProducerExternalID(),
+                producerCompProducerDto.getProducerExternalIDType()));
+
+        memGroupContractProducerVO.setWritingAgentID(getProducerID(
+                producerCompProducerDto.getWritingAgentExternalID(),
+                producerCompProducerDto.getWritingAgentExternalIDType()));
+
+        if (!StringUtils.isEmpty(producerCompProducerDto.getEffectiveDate())) {
+            Date effectiveDate = Date.valueOf(producerCompProducerDto.getEffectiveDate());
+            memGroupContractProducerVO.setEffectiveDate(effectiveDate);
+        }
+
+        if (!StringUtils.isEmpty(producerCompProducerDto.getExpirationDate())) {
+            Date expirationDate = Date.valueOf(producerCompProducerDto.getExpirationDate());
+            memGroupContractProducerVO.setExpirationDate(expirationDate);
+        }
+
+        if (!StringUtils.isEmpty(producerCompProducerDto.getPctOfCommission())) {
+            Decimal2 pctOfCommission = Decimal2.valueOf(producerCompProducerDto.getPctOfCommission());
+            memGroupContractProducerVO.setPctOfCommission(pctOfCommission);
+        }
+        return memGroupContractProducerVO;
+    }
+
+    private void setCompTypeServiceFeeFields(MemGroupContractProducerVO memGroupContractProducerVO,
+                                             String billingSchedID,
+                                             String billItemType,
+                                             ProducerCompContractProducerDto producerCompContractProducerDto,
+                                             ProducerCompProducerDto producerCompProducerDto) {
+
+        memGroupContractProducerVO.setBillingSchedID(billingSchedID);
+        memGroupContractProducerVO.setBillItemType(billItemType);
+        memGroupContractProducerVO.setBillingAssignUseType(producerCompProducerDto.getServiceFeeBillingAssignUseType());
+        memGroupContractProducerVO.setServiceFeeBillingType(producerCompProducerDto.getServiceFeeBillType());
+        memGroupContractProducerVO.setSitusState(producerCompContractProducerDto.getSitusState());
+        memGroupContractProducerVO.setFundingSource(producerCompContractProducerDto.getFundingSource());
+
+        long serviceFeeAgreementID = Long.parseLong(producerCompProducerDto.getServiceFeeAgreementID());
+        memGroupContractProducerVO.setServiceFeeAgreementID(serviceFeeAgreementID);
+    }
+
+    private long getProducerID(String originalSourceSystemID, String originalSourceSystemType) {
+        ProducerExternalIDVO producerExternalIDVO = producerExternalID.read(originalSourceSystemID, originalSourceSystemType);
+        if (producerExternalIDVO == null) {
+            logger.error("ProducerExternalID with originalSourceSystemType {} and originalSourceSystemID {} not found.", originalSourceSystemType, originalSourceSystemID);
+            throw new UhgRuntimeException(MemberGroupMessages.ERR_PRODUCEREXTERNALID_NOT_FOUND.addMessageArgs(originalSourceSystemType, originalSourceSystemID));
+        }
+        return producerExternalIDVO.getProducerID();
+    }
+
+    private void validateBillingCalcMethod(ProducerCompProducerDto producerCompProducerDto) {
+        if (StringUtils.equals(producerCompProducerDto.getServiceFeeBillingCalcMethod(), ReferenceConstants.BILLINGCALCMETHOD_FLAT_RATE)) {
+            Message invalidBillingCalcMsg = MemberGroupMessages.ERR_CANT_ASSIGN_BILLING_SCHED;
+            logger.error(invalidBillingCalcMsg.getMessageString());
+            throw new UhgRuntimeException(invalidBillingCalcMsg);
+        }
+    }
+
+    private void validateMessageFields(ProducerCompProducerDto producerCompProducerDto) {
+        if (StringUtils.isEmpty(producerCompProducerDto.getServiceFeeAgreementID())) {
+            Message missingServiceFeeAgreementIDMsg = MemberGroupMessages.ERR_MISSING_SERVICE_FEE_AGREEMENT_ID.addMessageArgs(producerCompProducerDto.getProducerExternalID());
+            logger.error(missingServiceFeeAgreementIDMsg.getMessageString());
+            throw new UhgRuntimeException(missingServiceFeeAgreementIDMsg);
+        }
+
+        if (StringUtils.isEmpty(producerCompProducerDto.getServiceFeeBillingAssignUseType())) {
+            Message invalidBillingSchedMsg = MemberGroupMessages.ERR_MISSING_BILLING_ASSIGN_USE_TYPE.addMessageArgs(producerCompProducerDto.getProducerExternalID());
+            logger.error(invalidBillingSchedMsg.getMessageString());
+            throw new UhgRuntimeException(invalidBillingSchedMsg);
+        }
+
+        if (StringUtils.isEmpty(producerCompProducerDto.getServiceFeeRateAmt()) && StringUtils.isEmpty(producerCompProducerDto.getServiceFeeRatePct())) {
+            Message missingRateAmtOrRatePctMsg = MemberGroupMessages.ERR_MISSING_RATE_AMT_OR_RATE_PCT.addMessageArgs(producerCompProducerDto.getProducerExternalID());
+            logger.error(missingRateAmtOrRatePctMsg.getMessageString());
+            throw new UhgRuntimeException(missingRateAmtOrRatePctMsg);
+        }
+    }
+
+    private MemGroupContractProducerVO createInheritingMemGroupContractProducer(long memGroupContractID,
+                                                                                String billingSchedID,
+                                                                                SysFinSettingVO sysFinSettingVO,
+                                                                                ProducerCompContractProducerDto producerCompContractProducerDto,
+                                                                                ProducerCompProducerDto producerCompProducerDto,
+                                                                                MemGroupContractAffilVO memGroupContractAffilVO) {
+        MemGroupContractProducerVO memGroupContractProducerVO = new MemGroupContractProducerVO();
+        memGroupContractProducerVO.setMemGroupID(memGroupContractAffilVO.getOwningMemGroupID());
+        memGroupContractProducerVO.setAffilMemGroupID(memGroupContractAffilVO.getMemGroupID());
+
+        if (!StringUtils.isEmpty(producerCompProducerDto.getEffectiveDate())) {
+            memGroupContractProducerVO.setEffectiveDate(UhgCalendarUtilities.getLaterDate(Date.valueOf(producerCompProducerDto.getEffectiveDate()),
+                    memGroupContractAffilVO.getEffectiveDate()));
+        } else {
+            memGroupContractProducerVO.setEffectiveDate(memGroupContractAffilVO.getEffectiveDate());
+        }
+        if (!StringUtils.isEmpty(producerCompProducerDto.getExpirationDate())) {
+            memGroupContractProducerVO.setExpirationDate(UhgCalendarUtilities.getEarlierDate(Date.valueOf(producerCompProducerDto.getExpirationDate()),
+                    memGroupContractAffilVO.getExpirationDate()));
+        } else {
+            memGroupContractProducerVO.setExpirationDate(memGroupContractAffilVO.getExpirationDate());
+        }
+        memGroupContractProducerVO.setMemGroupContractID(memGroupContractID);
+        memGroupContractProducerVO.setCompensationType(producerCompContractProducerDto.getCompensationType());
+        memGroupContractProducerVO.setProductType(producerCompContractProducerDto.getProductType());
+        memGroupContractProducerVO.setContractOptType(producerCompContractProducerDto.getContractOptType());
+
+        if (StringUtils.equals(producerCompContractProducerDto.getCompensationType(), ReferenceConstants.COMPENSATIONTYPE_SERVICE_FEE)) {
+            setCompTypeServiceFeeFields(memGroupContractProducerVO,
+                    billingSchedID,
+                    sysFinSettingVO.getServiceFeeBillItemType(),
+                    producerCompContractProducerDto,
+                    producerCompProducerDto);
+        }
+        memGroupContractProducerVO.setProducerType(producerCompProducerDto.getProducerType());
+
+        memGroupContractProducerVO.setProducerID(getProducerID(
+                producerCompProducerDto.getProducerExternalID(),
+                producerCompProducerDto.getProducerExternalIDType()));
+
+        memGroupContractProducerVO.setWritingAgentID(getProducerID(
+                producerCompProducerDto.getWritingAgentExternalID(),
+                producerCompProducerDto.getWritingAgentExternalIDType()));
+
+        if (!StringUtils.isEmpty(producerCompProducerDto.getPctOfCommission())) {
+            Decimal2 pctOfCommission = Decimal2.valueOf(producerCompProducerDto.getPctOfCommission());
+            memGroupContractProducerVO.setPctOfCommission(pctOfCommission);
+        }
+
+        return memGroupContractProducerVO;
+    }
+
+    private SysBillingDefaultValueVO getSysBillingDefaultValue(long memGroupID, long memGroupContractID,
+                                                               ProducerCompContractProducerDto contractProducerDto,
+                                                               ProducerCompProducerDto producerDto) {
+        Date effDate = !StringUtils.isBlank(producerDto.getEffectiveDate()) ? Date.valueOf(producerDto.getEffectiveDate()) : null;
+        Date expDate = !StringUtils.isBlank(producerDto.getExpirationDate()) ? Date.valueOf(producerDto.getExpirationDate()) : UhgCalendarUtilities.DEFAULT_TERMINATION_DATE;
+        MemGroupContractPlanOptionVO planOptionVO = getMemGroupContractPlanOptionVO(memGroupID, memGroupContractID, contractProducerDto.getContractOptType(), effDate, expDate);
+        return sysBillingDefaultValue.findBillingDefaultValueByOptTypeAndEffectiveDate(contractProducerDto.getSitusState(), effDate,
+                planOptionVO.getSellingCarrierID(), producerDto.getServiceFeeBillingCalcMethod(), contractProducerDto.getContractOptType(), getRevenueArrangement(planOptionVO));
+    }
+
+    private MemGroupContractPlanOptionVO getMemGroupContractPlanOptionVO(long memGroupID, long memGroupContractID, String contractOptType, Date effDate, Date expDate) {
+        MemGroupContractOptVO memGroupContractOptVO = memGroupContractOpt.readByContractIDContractOptTypeAndOverlappingDates(memGroupID, memGroupContractID, contractOptType, effDate, expDate);
+        return memGroupContractPlanOption.readEarliestNonDeleted(memGroupContractOptVO.getMemGroupContractOptID());
+
+    }
+
+    private String getRevenueArrangement(MemGroupContractPlanOptionVO planOptionVO) {
+        if (ReferenceConstants.CONTRACT_PLAN_OPTION_TYPE_FINANCIAL_PROTECTION.equals(planOptionVO.getContractPlanOptionType())) {
+            return planOptionVO.getRevenueArrangement();
+        } else {
+            return getRevenueArrangementFromPlan(planOptionVO.getBenefitBundleID(), planOptionVO.getBenefitBundleOptionID());
+        }
+    }
+
+    private String getRevenueArrangementFromPlan(long benefitBundleID, long benefitBundleOptionID) {
+        BenefitBundlePlanVO benefitBundlePlanVO = benefitBundlePlan.read(benefitBundleID, benefitBundleOptionID);
+        if (benefitBundlePlanVO != null) {
+            BenefitPlanVO benefitPlanVO = benefitPlan.readActiveBenefitPlan(benefitBundlePlanVO.getPlanID());
+            if (benefitPlanVO != null) {
+                return benefitPlanVO.getRevenueArrangement();
+            }
+        }
+        return null;
+    }
+}
