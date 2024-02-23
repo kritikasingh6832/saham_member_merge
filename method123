@@ -1,0 +1,45 @@
+public List<MemGroupContractProducerVO> createInheritingMemGroupContractProducerList(long memGroupID, long memGroupContractID,
+                                                                                         ProducerCompContractProducerDto producerCompContractProducerDto) {
+        SysFinSettingVO sysFinSettingVO = sysFinSetting.read();
+        List<MemGroupContractProducerVO> memGroupContractProducerVOs = new ArrayList<>();
+        List<ProducerCompProducerDto> producerCompProducerDtos = producerCompContractProducerDto.getProducerCompProducers();
+        List<ErrorMessage> errorMessageList = new ArrayList<>();
+
+        for (ProducerCompProducerDto producerCompProducerDto : producerCompProducerDtos) {
+
+            Date expirationDate = StringUtils.isBlank(producerCompProducerDto.getExpirationDate()) ?
+                    UhgCalendarUtilities.DEFAULT_TERMINATION_DATE : UhgCalendarUtilities.getSQLDate(producerCompProducerDto.getExpirationDate());
+            List<MemGroupContractAffilVO> memGroupContractAffilVOList = memGroupContractAffil.listActiveByMemGroupIDContractIDOverlappingDates(memGroupID, memGroupContractID,
+                    UhgCalendarUtilities.getSQLDate(producerCompProducerDto.getEffectiveDate()), expirationDate);
+
+            for (MemGroupContractAffilVO memGroupContractAffilVO : memGroupContractAffilVOList) {
+                String billingSchedID = null;
+                if (StringUtils.equals(producerCompContractProducerDto.getCompensationType(), ReferenceConstants.COMPENSATIONTYPE_SERVICE_FEE)) {
+                    validateBillingCalcMethod(producerCompProducerDto);
+                    validateMessageFields(producerCompProducerDto);
+                    //Retrives list of SysBiil... instead of single record
+                    List<SysBillingDefaultValueVO> sysBillingDefaultValueVOList = (List<SysBillingDefaultValueVO>) getSysBillingDefaultValue(
+                            memGroupID, memGroupContractID,
+                            producerCompContractProducerDto, producerCompProducerDto
+                    );
+
+                    //empty check
+                    if(sysBillingDefaultValueVOList.isEmpty()) {
+                         errorMessageList.add(new ErrorMessage(MemberGroupMessages.ERR_CANNOT_CREATE_MEMGROUPEVENT_INVALID_EXTERNAL_CORRELATIONID_COEXISTS.getMessageID(),
+                                MemberGroupMessages.ERR_CANNOT_CREATE_MEMGROUPEVENT_INVALID_EXTERNAL_CORRELATIONID_COEXISTS.getMessageString()));
+                    }
+                    billingSchedID = producerCompGlobalDataAddService.createBillingScheduleForProducer(sysBillingDefaultValueVO, producerCompProducerDto);
+                }
+                MemGroupContractProducerVO memGroupContractProducerVO = createInheritingMemGroupContractProducer(
+                        memGroupContractID,
+                        billingSchedID,
+                        sysFinSettingVO,
+                        producerCompContractProducerDto,
+                        producerCompProducerDto,
+                        memGroupContractAffilVO);
+                memGroupContractProducerVOs.add(memGroupContractProducerVO);
+            }
+        }
+
+        return memGroupContractProducerVOs;
+    }
