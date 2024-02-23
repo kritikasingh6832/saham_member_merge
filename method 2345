@@ -44,3 +44,5 @@ public List<MemGroupContractProducerVO> createInheritingMemGroupContractProducer
 
         return memGroupContractProducerVOs;
     }
+
+The error message is indicating that you are trying to call a non-static method 'getMemGroupID()' from a static context. The method 'getMemGroupID()' is likely an instance method that belongs to the 'MemGroupContractProducerVO' class. To fix the error, you should create an instance of the 'MemGroupContractProducerVO' class and call the 'getMemGroupID()' method on that instance instead of calling it on the class itself.
