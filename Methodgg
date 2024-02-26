@@ -1,0 +1,9 @@
+private SysBillingDefaultValueVO getSysBillingDefaultValue(long memGroupID, long memGroupContractID,
+                                                               ProducerCompContractProducerDto contractProducerDto,
+                                                               ProducerCompProducerDto producerDto) {
+        Date effDate = !StringUtils.isBlank(producerDto.getEffectiveDate()) ? Date.valueOf(producerDto.getEffectiveDate()) : null;
+        Date expDate = !StringUtils.isBlank(producerDto.getExpirationDate()) ? Date.valueOf(producerDto.getExpirationDate()) : UhgCalendarUtilities.DEFAULT_TERMINATION_DATE;
+        MemGroupContractPlanOptionVO planOptionVO = getMemGroupContractPlanOptionVO(memGroupID, memGroupContractID, contractProducerDto.getContractOptType(), effDate, expDate);
+        return sysBillingDefaultValue.findBillingDefaultValueByOptTypeAndEffectiveDate(contractProducerDto.getSitusState(), effDate,
+                planOptionVO.getSellingCarrierID(), producerDto.getServiceFeeBillingCalcMethod(), contractProducerDto.getContractOptType(), getRevenueArrangement(planOptionVO));
+    }
