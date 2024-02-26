@@ -1,0 +1,15 @@
+private SysBillingDefaultValueVO getSysBillingDefaultValue(long memGroupID, long memGroupContractID,
+                                                               ProducerCompContractProducerDto contractProducerDto,
+                                                               ProducerCompProducerDto producerDto, List<String> errorMessageList) {
+        Date effDate = !StringUtils.isBlank(producerDto.getEffectiveDate()) ? Date.valueOf(producerDto.getEffectiveDate()) : null;
+        Date expDate = !StringUtils.isBlank(producerDto.getExpirationDate()) ? Date.valueOf(producerDto.getExpirationDate()) : UhgCalendarUtilities.DEFAULT_TERMINATION_DATE;
+        MemGroupContractPlanOptionVO planOptionVO = getMemGroupContractPlanOptionVO(memGroupID, memGroupContractID, contractProducerDto.getContractOptType(), effDate, expDate);
+
+
+        sysBillingDefaultValue.findBillingDefaultValueByOptTypeAndEffectiveDate(contractProducerDto.getSitusState(), effDate,
+                planOptionVO.getSellingCarrierID(), producerDto.getServiceFeeBillingCalcMethod(), contractProducerDto.getContractOptType(), getRevenueArrangement(planOptionVO));
+
+        if (sysBillingDefaultValueVOList.isEmpty() || sysBillingDefaultValueVOList.size() > 1) {
+            errorMessageList.add(String.valueOf(MemberGroupMessages.ERR_FAILED_TO_CREATE_PRODUCER_BILLING_SCHEDULE.addMessageArgs(memGroupID, planOptionVO.getSellingCarrierID(), contractProducerDto.getSitusState(), getRevenueArrangement(planOptionVO), contractProducerDto.getContractOptType(), effDate, producerDto.getServiceFeeBillingCalcMethod())));
+        }
+    }
