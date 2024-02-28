@@ -1,0 +1,19 @@
+public final void setRequiredSysBillingDefaultValue(SysBillingDefaultValue sysBillingDefaultValue) {
+        this.sysBillingDefaultValue = sysBillingDefaultValue;
+    }
+
+    public final void setRequiredBenefitBundlePlan(BenefitBundlePlan benefitBundlePlan) {
+        this.benefitBundlePlan = benefitBundlePlan;
+    }
+
+    public final void setRequiredBenefitPlan(BenefitPlan benefitPlan) {
+        this.benefitPlan = benefitPlan;
+    }
+
+    public final void setRequiredMemGroupContractOpt(MemGroupContractOpt memGroupContractOpt) {
+        this.memGroupContractOpt = memGroupContractOpt;
+    }
+
+    public final void setRequiredMemGroupContractPlanOption(MemGroupContractPlanOption memGroupContractPlanOption) {
+        this.memGroupContractPlanOption = memGroupContractPlanOption;
+    }
