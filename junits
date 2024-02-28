@@ -1,0 +1,1126 @@
+package com.optum.cirrus.legacy.core.messaging.inbound.membergroup.service.impl
+
+import com.optum.cirrus.legacy.api.constants.ReferenceConstants
+import com.optum.cirrus.legacy.core.benefit.businesslogic.BenefitPlan
+import com.optum.cirrus.legacy.core.benefit.data.BenefitPlanVO
+import com.optum.cirrus.legacy.core.benefitBundle.businesslogic.BenefitBundlePlan
+import com.optum.cirrus.legacy.core.benefitBundle.data.BenefitBundlePlanVO
+import com.optum.cirrus.legacy.core.membergroup.contract.affil.businesslogic.MemGroupContractAffil
+import com.optum.cirrus.legacy.core.membergroup.contract.affil.data.MemGroupContractAffilVO
+import com.optum.cirrus.legacy.core.membergroup.contract.businesslogic.MemGroupContractOpt
+import com.optum.cirrus.legacy.core.membergroup.contract.businesslogic.MemGroupContractPlanOption
+import com.optum.cirrus.legacy.core.membergroup.contract.data.MemGroupContractOptVO
+import com.optum.cirrus.legacy.core.membergroup.contract.data.MemGroupContractPlanOptionVO
+import com.optum.cirrus.legacy.core.membergroup.data.MemGroupContractProducerVO
+import com.optum.cirrus.legacy.core.messaging.inbound.membergroup.data.ProducerCompContractProducerDto
+import com.optum.cirrus.legacy.core.messaging.inbound.membergroup.data.ProducerCompProducerDto
+import com.optum.cirrus.legacy.core.membergroup.businesslogic.service.producercomp.ProducerCompGlobalDataAddService
+import com.optum.cirrus.legacy.core.properties.MemberGroupMessages
+import com.optum.cirrus.legacy.core.sales.businesslogic.ProducerExternalID
+import com.optum.cirrus.legacy.core.sales.data.ProducerExternalIDVO
+import com.optum.cirrus.legacy.core.settings.businesslogic.SysFinSetting
+import com.optum.cirrus.legacy.core.settings.data.SysFinSettingVO
+import com.optum.cirrus.legacy.core.system.businesslogic.SysBillingDefaultValue
+import com.optum.cirrus.legacy.core.system.data.SysBillingDefaultValueVO
+import com.optum.ocf.core.util.Decimal2
+import com.optum.ocf.dao.exception.UhgRuntimeException
+import spock.lang.Specification
+import spock.lang.Unroll
+
+import java.sql.Date
+
+import static com.optum.cirrus.legacy.api.constants.ReferenceConstants.CONTRACTOPTTYPE_MEDICAL
+import static com.optum.cirrus.legacy.api.constants.ReferenceConstants.REVENUEARRANGEMENT_ASO_STOPLOSS
+import static com.optum.ocf.dao.util.UhgCalendarUtilities.DEFAULT_TERMINATION_DATE
+import static com.optum.ocf.test.core.util.TestUtil.dec_31_2014
+import static com.optum.ocf.test.core.util.TestUtil.dec_31_9999
+import static com.optum.ocf.test.core.util.TestUtil.jan_01_2013
+import static com.optum.ocf.test.core.util.TestUtil.jan_01_2014
+
+class ProducerCompMessageTransformerSpec extends Specification {
+
+    ProducerCompGlobalDataAddService mockProducerCompGlobalDataAddService = Mock()
+    ProducerExternalID mockProducerExternalID = Mock()
+    SysFinSetting mockSysFinSetting = Mock()
+    MemGroupContractAffil mockMemGroupContractAffil = Mock()
+    SysBillingDefaultValue mockSysBillingDefaultValue = Mock()
+    BenefitBundlePlan mockBenefitBundlePlan = Mock()
+    BenefitPlan mockBenefitPlan = Mock()
+    MemGroupContractOpt mockMemGroupContractOpt = Mock()
+    MemGroupContractPlanOption mockMemGroupContractPlanOption = Mock()
+
+    ProducerCompMessageTransformerImpl producerCompMessageTransformer = new ProducerCompMessageTransformerImpl(
+            requiredProducerCompGlobalDataAddService: mockProducerCompGlobalDataAddService,
+            requiredProducerExternalID: mockProducerExternalID,
+            requiredSysFinSetting: mockSysFinSetting,
+            requiredMemGroupContractAffil: mockMemGroupContractAffil,
+            sysBillingDefaultValue: mockSysBillingDefaultValue,
+            benefitBundlePlan: mockBenefitBundlePlan,
+            benefitPlan: mockBenefitPlan,
+            memGroupContractOpt: mockMemGroupContractOpt,
+            memGroupContractPlanOption: mockMemGroupContractPlanOption
+    )
+
+    def 'test createInheritingMemGroupContractProducerList - valid - happy path'() {
+        given:
+        long memGroupID = 101
+        long memGroupContractID = 102
+        long memGroupContractAffilID = 103
+        long memGroupContractOptID = 104
+        long sellingCarrierID = 105
+        long benefitBundleID = 106
+        long benefitBundleOptionID = 107
+        String situsState = 'MN'
+        String contractOptType = CONTRACTOPTTYPE_MEDICAL
+        String planID = "MX000213"
+        String revenueArrangement = REVENUEARRANGEMENT_ASO_STOPLOSS
+        String billingSchedID = "billingSchedID"
+        String billItemType = "Service Fee Arrangements"
+        String producerExternalID = 'PRODUCEREXTERNALID'
+        String producerExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PCIS
+        String rateAmt = "11.38"
+        String serviceFeeAgreementID = "1138"
+        String billingAssignUseType = ReferenceConstants.PREMIUM_BILLING_PERIOD_TYPE_1ST_TO_END
+        String serviceFeeBillingCalcMethod = ReferenceConstants.BILLINGCALCMETHOD_PMPM
+        String writingAgentExternalID = 'WRITINGAGENTEXTERNALID'
+        String writingAgentExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PULSE
+        Date effectiveDate = jan_01_2013
+        Date expirationDate = dec_31_9999
+
+        MemGroupContractAffilVO memGroupContractAffilVO = new MemGroupContractAffilVO(
+                memGroupID: memGroupID,
+                owningMemGroupID: memGroupID,
+                memGroupContractAffilID: memGroupContractAffilID,
+                memGroupContractID: memGroupContractID,
+                effectiveDate: effectiveDate,
+                expirationDate: expirationDate
+        )
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                serviceFeeBillingAssignUseType: billingAssignUseType,
+                serviceFeeBillingCalcMethod: serviceFeeBillingCalcMethod,
+                producerExternalID: producerExternalID,
+                producerExternalIDType: producerExternalIDType,
+                serviceFeeAgreementID: serviceFeeAgreementID,
+                serviceFeeRateAmt: rateAmt,
+                writingAgentExternalID: writingAgentExternalID,
+                writingAgentExternalIDType: writingAgentExternalIDType,
+                effectiveDate: effectiveDate.toString(),
+                expirationDate: expirationDate.toString()
+
+        )
+        ProducerCompContractProducerDto producerCompContractProducerDto = new ProducerCompContractProducerDto(
+                compensationType: ReferenceConstants.COMPENSATIONTYPE_SERVICE_FEE,
+                contractOptType: contractOptType,
+                situsState: situsState,
+                producerCompProducers: [producerCompProducerDto]
+        )
+
+        ProducerExternalIDVO producerExternalIDVO = new ProducerExternalIDVO()
+        ProducerExternalIDVO writingAgentExternalIDVO = new ProducerExternalIDVO()
+
+        SysFinSettingVO sysFinSettingVO = new SysFinSettingVO(
+                serviceFeeBillItemType: billItemType
+        )
+        SysBillingDefaultValueVO sysBillingDefaultValueVO = new SysBillingDefaultValueVO()
+        MemGroupContractOptVO memGroupContractOptVO = new MemGroupContractOptVO(memGroupContractOptID: memGroupContractOptID)
+        MemGroupContractPlanOptionVO memGroupContractPlanOptionVO = new MemGroupContractPlanOptionVO(
+                benefitBundleOptionID: benefitBundleOptionID,
+                benefitBundleID: benefitBundleID,
+                sellingCarrierID: sellingCarrierID,
+                contractPlanOptionType: ReferenceConstants.CONTRACT_PLAN_OPTION_TYPE_BENEFIT_PLAN
+        )
+        BenefitBundlePlanVO benefitBundlePlanVO = new BenefitBundlePlanVO(
+                benefitBundleID: benefitBundleID,
+                planID: planID
+        )
+        BenefitPlanVO benefitPlanVO = new BenefitPlanVO(
+                planID: planID,
+                revenueArrangement: revenueArrangement
+        )
+
+        when:
+        List<MemGroupContractProducerVO> memGroupContractProducerVOs = producerCompMessageTransformer.createInheritingMemGroupContractProducerList(memGroupID, memGroupContractID, producerCompContractProducerDto)
+
+        then:
+        1 * mockSysFinSetting.read() >> sysFinSettingVO
+        1 * mockMemGroupContractAffil.listActiveByMemGroupIDContractIDOverlappingDates(memGroupID, memGroupContractID, effectiveDate, expirationDate) >> [memGroupContractAffilVO]
+        1 * mockMemGroupContractOpt.readByContractIDContractOptTypeAndOverlappingDates(memGroupID, memGroupContractID, contractOptType, effectiveDate, expirationDate) >> memGroupContractOptVO
+        1 * mockMemGroupContractPlanOption.readEarliestNonDeleted(memGroupContractOptID) >> memGroupContractPlanOptionVO
+        1 * mockBenefitBundlePlan.read(benefitBundleID, benefitBundleOptionID) >> benefitBundlePlanVO
+        1 * mockBenefitPlan.readActiveBenefitPlan(planID) >> benefitPlanVO
+        1 * mockSysBillingDefaultValue.findBillingDefaultValueByOptTypeAndEffectiveDate(
+                situsState, effectiveDate,
+                sellingCarrierID, serviceFeeBillingCalcMethod,
+                contractOptType, revenueArrangement) >> sysBillingDefaultValueVO
+        1 * mockProducerCompGlobalDataAddService.createBillingScheduleForProducer(sysBillingDefaultValueVO, producerCompProducerDto) >> billingSchedID
+        1 * mockProducerExternalID.read(producerExternalID, producerExternalIDType) >> producerExternalIDVO
+        1 * mockProducerExternalID.read(writingAgentExternalID, writingAgentExternalIDType) >> writingAgentExternalIDVO
+        0 * _
+
+        and:
+        memGroupContractProducerVOs
+        memGroupContractProducerVOs.size() == 1
+    }
+
+    def 'test createInheritingMemGroupContractProducerList - valid - happy path - default expirationDate'() {
+        given:
+        long memGroupID = 101
+        long owningMemGroupID = 2
+        long memGroupContractID = 102
+        long memGroupContractAffilID = 103
+        long memGroupContractOptID = 104
+        long sellingCarrierID = 105
+        long benefitBundleID = 106
+        long benefitBundleOptionID = 107
+        String situsState = 'MN'
+        String contractOptType = CONTRACTOPTTYPE_MEDICAL
+        String planID = "MX000213"
+        String revenueArrangement = REVENUEARRANGEMENT_ASO_STOPLOSS
+        String billingSchedID = "billingSchedID"
+        String billItemType = "Service Fee Arrangements"
+        String producerExternalID = 'PRODUCEREXTERNALID'
+        String producerExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PCIS
+        String rateAmt = "11.38"
+        String serviceFeeAgreementID = "1138"
+        String billingAssignUseType = ReferenceConstants.PREMIUM_BILLING_PERIOD_TYPE_1ST_TO_END
+        String serviceFeeBillingCalcMethod = ReferenceConstants.BILLINGCALCMETHOD_PMPM
+        String writingAgentExternalID = 'WRITINGAGENTEXTERNALID'
+        String writingAgentExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PULSE
+        Date effectiveDate = jan_01_2013
+        Date expirationDate = dec_31_9999
+
+        MemGroupContractAffilVO memGroupContractAffilVO = new MemGroupContractAffilVO(
+                memGroupID: memGroupID,
+                owningMemGroupID: owningMemGroupID,
+                memGroupContractAffilID: memGroupContractAffilID,
+                memGroupContractID: memGroupContractID,
+                effectiveDate: effectiveDate,
+                expirationDate: expirationDate
+        )
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                serviceFeeBillingAssignUseType: billingAssignUseType,
+                serviceFeeBillingCalcMethod: serviceFeeBillingCalcMethod,
+                producerExternalID: producerExternalID,
+                producerExternalIDType: producerExternalIDType,
+                serviceFeeAgreementID: serviceFeeAgreementID,
+                serviceFeeRateAmt: rateAmt,
+                writingAgentExternalID: writingAgentExternalID,
+                writingAgentExternalIDType: writingAgentExternalIDType,
+                effectiveDate: effectiveDate.toString()
+        )
+        ProducerCompContractProducerDto producerCompContractProducerDto = new ProducerCompContractProducerDto(
+                compensationType: ReferenceConstants.COMPENSATIONTYPE_SERVICE_FEE,
+                contractOptType: contractOptType,
+                situsState: situsState,
+                producerCompProducers: [producerCompProducerDto]
+        )
+
+        ProducerExternalIDVO producerExternalIDVO = new ProducerExternalIDVO()
+        ProducerExternalIDVO writingAgentExternalIDVO = new ProducerExternalIDVO()
+
+        SysFinSettingVO sysFinSettingVO = new SysFinSettingVO(
+                serviceFeeBillItemType: billItemType
+        )
+        SysBillingDefaultValueVO sysBillingDefaultValueVO = new SysBillingDefaultValueVO()
+        MemGroupContractOptVO memGroupContractOptVO = new MemGroupContractOptVO(memGroupContractOptID: memGroupContractOptID)
+        MemGroupContractPlanOptionVO memGroupContractPlanOptionVO = new MemGroupContractPlanOptionVO(
+                benefitBundleOptionID: benefitBundleOptionID,
+                benefitBundleID: benefitBundleID,
+                sellingCarrierID: sellingCarrierID,
+                contractPlanOptionType: ReferenceConstants.CONTRACT_PLAN_OPTION_TYPE_BENEFIT_PLAN
+        )
+        BenefitBundlePlanVO benefitBundlePlanVO = new BenefitBundlePlanVO(
+                benefitBundleID: benefitBundleID,
+                planID: planID
+        )
+        BenefitPlanVO benefitPlanVO = new BenefitPlanVO(
+                planID: planID,
+                revenueArrangement: revenueArrangement
+        )
+
+        when:
+        List<MemGroupContractProducerVO> memGroupContractProducerVOs = producerCompMessageTransformer.createInheritingMemGroupContractProducerList(memGroupID, memGroupContractID, producerCompContractProducerDto)
+
+        then:
+        1 * mockSysFinSetting.read() >> sysFinSettingVO
+        1 * mockMemGroupContractAffil.listActiveByMemGroupIDContractIDOverlappingDates(memGroupID, memGroupContractID, effectiveDate, expirationDate) >> [memGroupContractAffilVO]
+        1 * mockMemGroupContractOpt.readByContractIDContractOptTypeAndOverlappingDates(memGroupID, memGroupContractID, contractOptType, effectiveDate, DEFAULT_TERMINATION_DATE) >> memGroupContractOptVO
+        1 * mockMemGroupContractPlanOption.readEarliestNonDeleted(memGroupContractOptID) >> memGroupContractPlanOptionVO
+        1 * mockBenefitBundlePlan.read(benefitBundleID, benefitBundleOptionID) >> benefitBundlePlanVO
+        1 * mockBenefitPlan.readActiveBenefitPlan(planID) >> benefitPlanVO
+        1 * mockSysBillingDefaultValue.findBillingDefaultValueByOptTypeAndEffectiveDate(
+                situsState, effectiveDate,
+                sellingCarrierID, serviceFeeBillingCalcMethod,
+                contractOptType, revenueArrangement) >> sysBillingDefaultValueVO
+        1 * mockProducerCompGlobalDataAddService.createBillingScheduleForProducer(sysBillingDefaultValueVO, producerCompProducerDto) >> billingSchedID
+        1 * mockProducerExternalID.read(producerExternalID, producerExternalIDType) >> producerExternalIDVO
+        1 * mockProducerExternalID.read(writingAgentExternalID, writingAgentExternalIDType) >> writingAgentExternalIDVO
+        0 * _
+
+        and:
+        memGroupContractProducerVOs
+        memGroupContractProducerVOs.size() == 1
+    }
+
+    def 'test createInheritingMemGroupContractProducerList - valid - two affiliations - happy path'() {
+        given:
+        long memGroupID = 101
+        long memGroupContractID = 102
+        long memGroupContractAffilID = 103
+        long memGroupContractOptID = 104
+        long sellingCarrierID = 105
+        long benefitBundleID = 106
+        long benefitBundleOptionID = 107
+        String situsState = 'MN'
+        String contractOptType = CONTRACTOPTTYPE_MEDICAL
+        String planID = "MX000213"
+        String revenueArrangement = REVENUEARRANGEMENT_ASO_STOPLOSS
+        String billingSchedID = "billingSchedID"
+        String billItemType = "Service Fee Arrangements"
+        String producerExternalID = 'PRODUCEREXTERNALID'
+        String producerExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PCIS
+        String rateAmt = "11.38"
+        String serviceFeeAgreementID = "1138"
+        String billingAssignUseType = ReferenceConstants.PREMIUM_BILLING_PERIOD_TYPE_1ST_TO_END
+        String serviceFeeBillingCalcMethod = ReferenceConstants.BILLINGCALCMETHOD_PMPM
+        String writingAgentExternalID = 'WRITINGAGENTEXTERNALID'
+        String writingAgentExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PULSE
+        Date effectiveDate = jan_01_2013
+        Date expirationDate = dec_31_9999
+
+        MemGroupContractAffilVO memGroupContractAffilVO_1 = new MemGroupContractAffilVO(
+                memGroupID: memGroupID,
+                owningMemGroupID: memGroupID,
+                memGroupContractAffilID: memGroupContractAffilID,
+                memGroupContractID: memGroupContractID,
+                effectiveDate: effectiveDate,
+                expirationDate: expirationDate
+        )
+        MemGroupContractAffilVO memGroupContractAffilVO_2 = new MemGroupContractAffilVO(
+                memGroupID: memGroupID,
+                owningMemGroupID: memGroupID,
+                memGroupContractAffilID: memGroupContractAffilID,
+                memGroupContractID: memGroupContractID,
+                effectiveDate: jan_01_2014,
+                expirationDate: expirationDate
+        )
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                serviceFeeBillingAssignUseType: billingAssignUseType,
+                serviceFeeBillingCalcMethod: serviceFeeBillingCalcMethod,
+                producerExternalID: producerExternalID,
+                producerExternalIDType: producerExternalIDType,
+                serviceFeeAgreementID: serviceFeeAgreementID,
+                serviceFeeRateAmt: rateAmt,
+                writingAgentExternalID: writingAgentExternalID,
+                writingAgentExternalIDType: writingAgentExternalIDType,
+                effectiveDate: effectiveDate.toString(),
+                expirationDate: expirationDate.toString()
+
+        )
+        ProducerCompContractProducerDto producerCompContractProducerDto = new ProducerCompContractProducerDto(
+                compensationType: ReferenceConstants.COMPENSATIONTYPE_SERVICE_FEE,
+                contractOptType: contractOptType,
+                situsState: situsState,
+                producerCompProducers: [producerCompProducerDto]
+        )
+
+        ProducerExternalIDVO producerExternalIDVO = new ProducerExternalIDVO()
+        ProducerExternalIDVO writingAgentExternalIDVO = new ProducerExternalIDVO()
+
+        SysFinSettingVO sysFinSettingVO = new SysFinSettingVO(
+                serviceFeeBillItemType: billItemType
+        )
+        SysBillingDefaultValueVO sysBillingDefaultValueVO = new SysBillingDefaultValueVO()
+        MemGroupContractOptVO memGroupContractOptVO = new MemGroupContractOptVO(memGroupContractOptID: memGroupContractOptID)
+        MemGroupContractPlanOptionVO memGroupContractPlanOptionVO = new MemGroupContractPlanOptionVO(
+                benefitBundleOptionID: benefitBundleOptionID,
+                benefitBundleID: benefitBundleID,
+                sellingCarrierID: sellingCarrierID,
+                contractPlanOptionType: ReferenceConstants.CONTRACT_PLAN_OPTION_TYPE_BENEFIT_PLAN
+        )
+        BenefitBundlePlanVO benefitBundlePlanVO = new BenefitBundlePlanVO(
+                benefitBundleID: benefitBundleID,
+                planID: planID
+        )
+        BenefitPlanVO benefitPlanVO = new BenefitPlanVO(
+                planID: planID,
+                revenueArrangement: revenueArrangement
+        )
+
+        when:
+        List<MemGroupContractProducerVO> memGroupContractProducerVOs = producerCompMessageTransformer.createInheritingMemGroupContractProducerList(memGroupID, memGroupContractID, producerCompContractProducerDto)
+
+        then:
+        1 * mockSysFinSetting.read() >> sysFinSettingVO
+        1 * mockMemGroupContractAffil.listActiveByMemGroupIDContractIDOverlappingDates(memGroupID, memGroupContractID, effectiveDate, expirationDate) >> [memGroupContractAffilVO_1, memGroupContractAffilVO_2]
+        2 * mockMemGroupContractOpt.readByContractIDContractOptTypeAndOverlappingDates(memGroupID, memGroupContractID, contractOptType, effectiveDate, expirationDate) >> memGroupContractOptVO
+        2 * mockMemGroupContractPlanOption.readEarliestNonDeleted(memGroupContractOptID) >> memGroupContractPlanOptionVO
+        2 * mockBenefitBundlePlan.read(benefitBundleID, benefitBundleOptionID) >> benefitBundlePlanVO
+        2 * mockBenefitPlan.readActiveBenefitPlan(planID) >> benefitPlanVO
+        2 * mockSysBillingDefaultValue.findBillingDefaultValueByOptTypeAndEffectiveDate(
+                situsState, effectiveDate,
+                sellingCarrierID, serviceFeeBillingCalcMethod,
+                contractOptType, revenueArrangement) >> sysBillingDefaultValueVO
+        2 * mockProducerCompGlobalDataAddService.createBillingScheduleForProducer(sysBillingDefaultValueVO, producerCompProducerDto) >> billingSchedID
+        2 * mockProducerExternalID.read(producerExternalID, producerExternalIDType) >> producerExternalIDVO
+        2 * mockProducerExternalID.read(writingAgentExternalID, writingAgentExternalIDType) >> writingAgentExternalIDVO
+        0 * _
+
+        and:
+        memGroupContractProducerVOs
+        memGroupContractProducerVOs.size() == 2
+    }
+
+    def 'test createMemGroupContractProducerList - valid - happy path'() {
+        given:
+        long memGroupID = 101
+        long memGroupContractID = 102
+        long memGroupContractOptID = 104
+        long sellingCarrierID = 105
+        long benefitBundleID = 106
+        long benefitBundleOptionID = 107
+        String situsState = 'MN'
+        String contractOptType = CONTRACTOPTTYPE_MEDICAL
+        String planID = "MX000213"
+        String revenueArrangement = REVENUEARRANGEMENT_ASO_STOPLOSS
+        String billingSchedID = "billingSchedID"
+        String billItemType = "Service Fee Arrangements"
+        String producerExternalID = 'PRODUCEREXTERNALID'
+        String producerExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PCIS
+        String rateAmt = "11.38"
+        String serviceFeeAgreementID = "1138"
+        String billingAssignUseType = ReferenceConstants.PREMIUM_BILLING_PERIOD_TYPE_1ST_TO_END
+        String serviceFeeBillingCalcMethod = ReferenceConstants.BILLINGCALCMETHOD_PMPM
+        String writingAgentExternalID = 'WRITINGAGENTEXTERNALID'
+        String writingAgentExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PULSE
+        Date effectiveDate = jan_01_2013
+        Date expirationDate = dec_31_9999
+
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                serviceFeeBillingAssignUseType: billingAssignUseType,
+                serviceFeeBillingCalcMethod: serviceFeeBillingCalcMethod,
+                producerExternalID: producerExternalID,
+                producerExternalIDType: producerExternalIDType,
+                serviceFeeAgreementID: serviceFeeAgreementID,
+                serviceFeeRateAmt: rateAmt,
+                writingAgentExternalID: writingAgentExternalID,
+                writingAgentExternalIDType: writingAgentExternalIDType,
+                effectiveDate: effectiveDate.toString(),
+                expirationDate: expirationDate.toString()
+        )
+        ProducerCompContractProducerDto producerCompContractProducerDto = new ProducerCompContractProducerDto(
+                compensationType: ReferenceConstants.COMPENSATIONTYPE_SERVICE_FEE,
+                contractOptType: contractOptType,
+                situsState: situsState,
+                producerCompProducers: [producerCompProducerDto]
+        )
+
+        ProducerExternalIDVO producerExternalIDVO = new ProducerExternalIDVO()
+        ProducerExternalIDVO writingAgentExternalIDVO = new ProducerExternalIDVO()
+
+        SysFinSettingVO sysFinSettingVO = new SysFinSettingVO(
+                serviceFeeBillItemType: billItemType
+        )
+        SysBillingDefaultValueVO sysBillingDefaultValueVO = new SysBillingDefaultValueVO()
+        MemGroupContractOptVO memGroupContractOptVO = new MemGroupContractOptVO(memGroupContractOptID: memGroupContractOptID)
+        MemGroupContractPlanOptionVO memGroupContractPlanOptionVO = new MemGroupContractPlanOptionVO(
+                benefitBundleOptionID: benefitBundleOptionID,
+                benefitBundleID: benefitBundleID,
+                sellingCarrierID: sellingCarrierID,
+                contractPlanOptionType: ReferenceConstants.CONTRACT_PLAN_OPTION_TYPE_BENEFIT_PLAN
+        )
+        BenefitBundlePlanVO benefitBundlePlanVO = new BenefitBundlePlanVO(
+                benefitBundleID: benefitBundleID,
+                planID: planID
+        )
+        BenefitPlanVO benefitPlanVO = new BenefitPlanVO(
+                planID: planID,
+                revenueArrangement: revenueArrangement
+        )
+
+        when:
+        List<MemGroupContractProducerVO> memGroupContractProducerVOs = producerCompMessageTransformer.createMemGroupContractProducerList(memGroupID, memGroupContractID, producerCompContractProducerDto)
+
+        then:
+        1 * mockSysFinSetting.read() >> sysFinSettingVO
+        1 * mockMemGroupContractOpt.readByContractIDContractOptTypeAndOverlappingDates(memGroupID, memGroupContractID, contractOptType, effectiveDate, expirationDate) >> memGroupContractOptVO
+        1 * mockMemGroupContractPlanOption.readEarliestNonDeleted(memGroupContractOptID) >> memGroupContractPlanOptionVO
+        1 * mockBenefitBundlePlan.read(benefitBundleID, benefitBundleOptionID) >> benefitBundlePlanVO
+        1 * mockBenefitPlan.readActiveBenefitPlan(planID) >> benefitPlanVO
+        1 * mockSysBillingDefaultValue.findBillingDefaultValueByOptTypeAndEffectiveDate(
+                situsState, effectiveDate,
+                sellingCarrierID, serviceFeeBillingCalcMethod,
+                contractOptType, revenueArrangement) >> sysBillingDefaultValueVO
+        1 * mockProducerCompGlobalDataAddService.createBillingScheduleForProducer(sysBillingDefaultValueVO, producerCompProducerDto) >> billingSchedID
+        1 * mockProducerExternalID.read(producerExternalID, producerExternalIDType) >> producerExternalIDVO
+        1 * mockProducerExternalID.read(writingAgentExternalID, writingAgentExternalIDType) >> writingAgentExternalIDVO
+        0 * _
+
+        and:
+        memGroupContractProducerVOs
+        memGroupContractProducerVOs.size() == 1
+    }
+
+    def 'test createMemGroupContractProducer - valid - compensation type is commission - #scenario'() {
+        given:
+        long memGroupID = 101
+        long memGroupContractID = 201
+        String compensationType = ReferenceConstants.COMPENSATIONTYPE_COMMISSION
+        String contractOptType = ReferenceConstants.CONTRACTOPTTYPE_MEDICAL
+        String producerExternalID = 'PRODUCEREXTERNALID'
+        String producerExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PCIS
+        String producerType = ReferenceConstants.PRODUCER_BROKER
+        String productType = ReferenceConstants.PRODUCTTYPE_BENEFIT
+        String writingAgentExternalID = 'WRITINGAGENTEXTERNALID'
+        String writingAgentExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PULSE
+        long producerID = 301
+        long writingAgentID = 302
+        boolean commissionInd = false
+
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                commissionInd: commissionInd,
+                effectiveDate: effectiveDateString,
+                expirationDate: expirationDateString,
+                pctOfCommission: pctOfCommissionString,
+                producerExternalID: producerExternalID,
+                producerExternalIDType: producerExternalIDType,
+                producerType: producerType,
+                writingAgentExternalID: writingAgentExternalID,
+                writingAgentExternalIDType: writingAgentExternalIDType
+        )
+        ProducerCompContractProducerDto producerCompContractProducerDto = new ProducerCompContractProducerDto(
+                compensationType: compensationType,
+                contractOptType: contractOptType,
+                producerCompProducers: [producerCompProducerDto],
+                productType: productType
+        )
+        ProducerExternalIDVO producerExternalIDVO = new ProducerExternalIDVO(
+                producerID: producerID
+        )
+        ProducerExternalIDVO writingAgentExternalIDVO = new ProducerExternalIDVO(
+                producerID: writingAgentID
+        )
+
+        SysFinSettingVO sysFinSettingVO = new SysFinSettingVO()
+
+        when:
+        MemGroupContractProducerVO memGroupContractProducerVO = producerCompMessageTransformer.createMemGroupContractProducer(memGroupID, memGroupContractID, null, sysFinSettingVO, producerCompContractProducerDto, producerCompProducerDto)
+
+        then:
+        1 * mockProducerExternalID.read(producerExternalID, producerExternalIDType) >> producerExternalIDVO
+        1 * mockProducerExternalID.read(writingAgentExternalID, writingAgentExternalIDType) >> writingAgentExternalIDVO
+        0 * _
+
+        and:
+        memGroupContractProducerVO
+        memGroupContractProducerVO.memGroupID == memGroupID
+        memGroupContractProducerVO.memGroupContractID == memGroupContractID
+        memGroupContractProducerVO.compensationType == compensationType
+        memGroupContractProducerVO.productType == productType
+        memGroupContractProducerVO.contractOptType == contractOptType
+        !memGroupContractProducerVO.noCommissionInd
+        memGroupContractProducerVO.producerType == producerType
+        memGroupContractProducerVO.producerID == producerID
+        memGroupContractProducerVO.writingAgentID == writingAgentID
+        memGroupContractProducerVO.effectiveDate == effectiveDate
+        memGroupContractProducerVO.expirationDate == expirationDate
+        memGroupContractProducerVO.pctOfCommission == pctOfCommission
+        !memGroupContractProducerVO.billingSchedID
+        !memGroupContractProducerVO.billItemType
+        !memGroupContractProducerVO.billingAssignUseType
+        !memGroupContractProducerVO.serviceFeeBillingType
+        !memGroupContractProducerVO.situsState
+        !memGroupContractProducerVO.fundingSource
+        !memGroupContractProducerVO.serviceFeeAgreementID
+
+        where:
+        scenario                                             | effectiveDateString | effectiveDate              | expirationDateString | expirationDate             | pctOfCommissionString | pctOfCommission
+        "eff date, exp date, and pctOfCommission not set"    | null                | null                       | null                 | null                       | null                  | null
+        "eff date and exp date not set, pctOfCommission set" | null                | null                       | null                 | null                       | "11.38"               | Decimal2.valueOf("11.38")
+        "eff date and pctOfCommission not set, exp date set" | null                | null                       | "9999-12-31"         | Date.valueOf("9999-12-31") | null                  | null
+        "eff date not set, exp date and pctOfCommission set" | null                | null                       | "9999-12-31"         | Date.valueOf("9999-12-31") | "11.38"               | Decimal2.valueOf("11.38")
+        "eff date set, exp date and pctOfCommission not set" | "2019-01-01"        | Date.valueOf("2019-01-01") | null                 | null                       | null                  | null
+        "eff date and pctOfCommission set, exp date not set" | "2019-01-01"        | Date.valueOf("2019-01-01") | null                 | null                       | "11.38"               | Decimal2.valueOf("11.38")
+        "eff date and exp date set, pctOfCommission not set" | "2019-01-01"        | Date.valueOf("2019-01-01") | "9999-12-31"         | Date.valueOf("9999-12-31") | null                  | null
+        "eff date, exp date, and pctOfCommission set"        | "2019-01-01"        | Date.valueOf("2019-01-01") | "9999-12-31"         | Date.valueOf("9999-12-31") | "11.38"               | Decimal2.valueOf("11.38")
+    }
+
+    def 'test createMemGroupContractProducer - valid - compensation type is service fee - #scenario'() {
+        given:
+        long memGroupID = 101
+        long memGroupContractID = 201
+        long producerID = 301
+        long writingAgentID = 401
+        long serviceFeeAgreementID = 501
+        String billingAssignUseType = ReferenceConstants.PREMIUM_BILLING_PERIOD_TYPE_1ST_TO_END
+        String billingSchedID = "billingSchedID"
+        String billItemType = "Service Fee Arrangements"
+        String compensationType = ReferenceConstants.COMPENSATIONTYPE_SERVICE_FEE
+        String contractOptType = ReferenceConstants.CONTRACTOPTTYPE_MEDICAL
+        String fundingSource = ReferenceConstants.FUNDINGSOURCE_FULLY_INSURED
+        String producerExternalID = 'PRODUCEREXTERNALID'
+        String producerExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PCIS
+        String producerType = ReferenceConstants.PRODUCER_BROKER
+        String productType = ReferenceConstants.PRODUCTTYPE_BENEFIT
+        String rateAmt = "20.00"
+        String serviceFeeAgreementIDString = "501"
+        String serviceFeeBillingType = ReferenceConstants.CODESETTYPE_BILLTYPE
+        String situsState = ReferenceConstants.STATE_CT
+        String writingAgentExternalID = 'WRITINGAGENTEXTERNALID'
+        String writingAgentExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PULSE
+        boolean commissionInd = false
+
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                commissionInd: commissionInd,
+                effectiveDate: effectiveDateString,
+                expirationDate: expirationDateString,
+                pctOfCommission: pctOfCommissionString,
+                producerExternalID: producerExternalID,
+                producerExternalIDType: producerExternalIDType,
+                producerType: producerType,
+                serviceFeeAgreementID: serviceFeeAgreementIDString,
+                serviceFeeBillingAssignUseType: billingAssignUseType,
+                serviceFeeBillType: serviceFeeBillingType,
+                serviceFeeRateAmt: rateAmt,
+                writingAgentExternalID: writingAgentExternalID,
+                writingAgentExternalIDType: writingAgentExternalIDType
+        )
+        ProducerCompContractProducerDto producerCompContractProducerDto = new ProducerCompContractProducerDto(
+                compensationType: compensationType,
+                contractOptType: contractOptType,
+                fundingSource: fundingSource,
+                producerCompProducers: [producerCompProducerDto],
+                productType: productType,
+                situsState: situsState
+        )
+        ProducerExternalIDVO producerExternalIDVO = new ProducerExternalIDVO(
+                producerID: producerID
+        )
+        ProducerExternalIDVO writingAgentExternalIDVO = new ProducerExternalIDVO(
+                producerID: writingAgentID
+        )
+
+        SysFinSettingVO sysFinSettingVO = new SysFinSettingVO(
+                serviceFeeBillItemType: billItemType
+        )
+
+        when:
+        MemGroupContractProducerVO memGroupContractProducerVO = producerCompMessageTransformer.createMemGroupContractProducer(memGroupID, memGroupContractID, billingSchedID, sysFinSettingVO, producerCompContractProducerDto, producerCompProducerDto)
+
+        then:
+        1 * mockProducerExternalID.read(producerExternalID, producerExternalIDType) >> producerExternalIDVO
+        1 * mockProducerExternalID.read(writingAgentExternalID, writingAgentExternalIDType) >> writingAgentExternalIDVO
+        0 * _
+
+        and:
+        memGroupContractProducerVO
+        memGroupContractProducerVO.memGroupID == memGroupID
+        memGroupContractProducerVO.memGroupContractID == memGroupContractID
+        memGroupContractProducerVO.compensationType == compensationType
+        memGroupContractProducerVO.productType == productType
+        memGroupContractProducerVO.contractOptType == contractOptType
+        !memGroupContractProducerVO.noCommissionInd
+        memGroupContractProducerVO.producerType == producerType
+        memGroupContractProducerVO.producerID == producerID
+        memGroupContractProducerVO.writingAgentID == writingAgentID
+        memGroupContractProducerVO.effectiveDate == effectiveDate
+        memGroupContractProducerVO.expirationDate == expirationDate
+        memGroupContractProducerVO.pctOfCommission == pctOfCommission
+        memGroupContractProducerVO.billingSchedID == billingSchedID
+        memGroupContractProducerVO.billItemType == billItemType
+        memGroupContractProducerVO.billingAssignUseType == billingAssignUseType
+        memGroupContractProducerVO.serviceFeeBillingType == serviceFeeBillingType
+        memGroupContractProducerVO.situsState == situsState
+        memGroupContractProducerVO.fundingSource == fundingSource
+        memGroupContractProducerVO.serviceFeeAgreementID == serviceFeeAgreementID
+
+        where:
+        scenario                                             | effectiveDateString | effectiveDate              | expirationDateString | expirationDate             | pctOfCommissionString | pctOfCommission
+        "eff date, exp date, and pctOfCommission not set"    | null                | null                       | null                 | null                       | null                  | null
+        "eff date and exp date not set, pctOfCommission set" | null                | null                       | null                 | null                       | "11.38"               | Decimal2.valueOf("11.38")
+        "eff date and pctOfCommission not set, exp date set" | null                | null                       | "9999-12-31"         | Date.valueOf("9999-12-31") | null                  | null
+        "eff date not set, exp date and pctOfCommission set" | null                | null                       | "9999-12-31"         | Date.valueOf("9999-12-31") | "11.38"               | Decimal2.valueOf("11.38")
+        "eff date set, exp date and pctOfCommission not set" | "2019-01-01"        | Date.valueOf("2019-01-01") | null                 | null                       | null                  | null
+        "eff date and pctOfCommission set, exp date not set" | "2019-01-01"        | Date.valueOf("2019-01-01") | null                 | null                       | "11.38"               | Decimal2.valueOf("11.38")
+        "eff date and exp date set, pctOfCommission not set" | "2019-01-01"        | Date.valueOf("2019-01-01") | "9999-12-31"         | Date.valueOf("9999-12-31") | null                  | null
+        "eff date, exp date, and pctOfCommission set"        | "2019-01-01"        | Date.valueOf("2019-01-01") | "9999-12-31"         | Date.valueOf("9999-12-31") | "11.38"               | Decimal2.valueOf("11.38")
+    }
+
+    def 'test setCompTypeServiceFeeFields - valid - happy path'() {
+        given:
+        long serviceFeeAgreementID = 1
+
+        String billingSchedID = "billingSchedID"
+        String billItemType = "Service Fee Arrangements"
+        String billingAssignUseType = ReferenceConstants.PREMIUM_BILLING_PERIOD_TYPE_1ST_TO_END
+        String serviceFeeAgreementIDString = "1"
+        String serviceFeeBillingType = ReferenceConstants.CODESETTYPE_BILLTYPE
+        String situsState = ReferenceConstants.STATE_CT
+        String fundingSource = ReferenceConstants.FUNDINGSOURCE_FULLY_INSURED
+
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                serviceFeeAgreementID: serviceFeeAgreementIDString,
+                serviceFeeBillingAssignUseType: billingAssignUseType,
+                serviceFeeBillType: serviceFeeBillingType
+        )
+        ProducerCompContractProducerDto producerCompContractProducerDto = new ProducerCompContractProducerDto(
+                fundingSource: fundingSource,
+                producerCompProducers: [producerCompProducerDto],
+                situsState: situsState
+        )
+
+        MemGroupContractProducerVO memGroupContractProducerVO = new MemGroupContractProducerVO()
+
+        when:
+        producerCompMessageTransformer.setCompTypeServiceFeeFields(memGroupContractProducerVO, billingSchedID, billItemType, producerCompContractProducerDto, producerCompProducerDto)
+
+        then:
+        0 * _
+
+        and:
+        memGroupContractProducerVO
+        memGroupContractProducerVO.billingSchedID == billingSchedID
+        memGroupContractProducerVO.billItemType == billItemType
+        memGroupContractProducerVO.billingAssignUseType == billingAssignUseType
+        memGroupContractProducerVO.serviceFeeBillingType == serviceFeeBillingType
+        memGroupContractProducerVO.situsState == situsState
+        memGroupContractProducerVO.fundingSource == fundingSource
+        memGroupContractProducerVO.serviceFeeAgreementID == serviceFeeAgreementID
+    }
+
+    def 'test getProducerID - producer exists'() {
+        given:
+        long producerID = 101
+        String originalSourceSystemID = 'ORIGINALSOURCESYSTEMID'
+        String originalSourceSystemType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PCIS
+
+        ProducerExternalIDVO producerExternalIDVO = new ProducerExternalIDVO(
+                producerID: producerID,
+                originalSourceSystemID: originalSourceSystemID,
+                originalSourceSystemType: originalSourceSystemType
+        )
+
+        when:
+        long returnedProducerID = producerCompMessageTransformer.getProducerID(originalSourceSystemID, originalSourceSystemType)
+
+        then:
+        1 * mockProducerExternalID.read(originalSourceSystemID, originalSourceSystemType) >> producerExternalIDVO
+        0 * _
+
+        and:
+        returnedProducerID == producerID
+    }
+
+    def 'test getProducerID - producer not found'() {
+        given:
+        String originalSourceSystemID = 'ORIGINALSOURCESYSTEMID'
+        String originalSourceSystemType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PCIS
+
+        when:
+        producerCompMessageTransformer.getProducerID(originalSourceSystemID, originalSourceSystemType)
+
+        then:
+        1 * mockProducerExternalID.read(originalSourceSystemID, originalSourceSystemType) >> null
+        0 * _
+
+        and:
+        UhgRuntimeException uhgRuntimeException = thrown(UhgRuntimeException)
+        uhgRuntimeException.errorVO.globalMessages[0] == MemberGroupMessages.ERR_PRODUCEREXTERNALID_NOT_FOUND.addMessageArgs(originalSourceSystemType, originalSourceSystemID)
+    }
+
+    def 'test validateBillingCalcMethod - valid - billing calc method is not flat rate'() {
+        given:
+        String billingCalcMethod = ReferenceConstants.BILLINGCALCMETHOD_PMPM
+
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                serviceFeeBillingCalcMethod: billingCalcMethod
+        )
+
+        when:
+        producerCompMessageTransformer.validateBillingCalcMethod(producerCompProducerDto)
+
+        then:
+        0 * _
+
+        and:
+        noExceptionThrown()
+    }
+
+    def 'test validateBillingCalcMethod - invalid - billing calc method is flat rate'() {
+        given:
+        String billingCalcMethod = ReferenceConstants.BILLINGCALCMETHOD_FLAT_RATE
+        String producerExternalID = "producerExternalID"
+
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                producerExternalID: producerExternalID,
+                serviceFeeBillingCalcMethod: billingCalcMethod
+        )
+
+        when:
+        producerCompMessageTransformer.validateBillingCalcMethod(producerCompProducerDto)
+
+        then:
+        0 * _
+
+        and:
+        UhgRuntimeException uhgRuntimeException = thrown(UhgRuntimeException)
+        uhgRuntimeException.errorVO.globalMessages[0] == MemberGroupMessages.ERR_CANT_ASSIGN_BILLING_SCHED
+    }
+
+    @Unroll
+    def 'test validateMessageFields - valid - required fields are present - #scenario'() {
+        given:
+        String billingAssignUseType = ReferenceConstants.PREMIUM_BILLING_PERIOD_TYPE_1ST_TO_END
+        String serviceFeeAgreementID = "1"
+
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                serviceFeeAgreementID: serviceFeeAgreementID,
+                serviceFeeBillingAssignUseType: billingAssignUseType,
+                serviceFeeRateAmt: serviceFeeRateAmt,
+                serviceFeeRatePct: serviceFeePctAmt
+        )
+
+        when:
+        producerCompMessageTransformer.validateMessageFields(producerCompProducerDto)
+
+        then:
+        0 * _
+
+        and:
+        noExceptionThrown()
+
+        where:
+        scenario                                              | serviceFeeRateAmt | serviceFeePctAmt
+        "serviceFeePctAmt is populated"                       | null              | "11.38"
+        "serviceFeeRateAmt is populated"                      | "11.38"           | null
+        "serviceFeeRateAmt and serviceFeePctAmt is populated" | "11.38"           | "11.38"
+    }
+
+    def 'test validateMessageFields - invalid - serviceFeeAgreementID is missing on the payload'() {
+        given:
+        String producerExternalID = "producerExternalID"
+
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                producerExternalID: producerExternalID
+        )
+
+        when:
+        producerCompMessageTransformer.validateMessageFields(producerCompProducerDto)
+
+        then:
+        0 * _
+
+        and:
+        UhgRuntimeException uhgRuntimeException = thrown(UhgRuntimeException)
+        uhgRuntimeException.errorVO.globalMessages[0] == MemberGroupMessages.ERR_MISSING_SERVICE_FEE_AGREEMENT_ID.addMessageArgs(producerExternalID)
+    }
+
+    def 'test validateMessageFields - invalid - serviceFeeBillingAssignUseType is missing on the payload'() {
+        given:
+        String producerExternalID = "producerExternalID"
+        String serviceFeeAgreementID = "1"
+
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                producerExternalID: producerExternalID,
+                serviceFeeAgreementID: serviceFeeAgreementID
+        )
+
+        when:
+        producerCompMessageTransformer.validateMessageFields(producerCompProducerDto)
+
+        then:
+        0 * _
+
+        and:
+        UhgRuntimeException uhgRuntimeException = thrown(UhgRuntimeException)
+        uhgRuntimeException.errorVO.globalMessages[0] == MemberGroupMessages.ERR_MISSING_BILLING_ASSIGN_USE_TYPE.addMessageArgs(producerExternalID)
+    }
+
+    def 'test validateMessageFields - invalid - serviceFeeRateAmt and serviceFeePctAmt is missing on the payload'() {
+        given:
+        String billingAssignUseType = ReferenceConstants.PREMIUM_BILLING_PERIOD_TYPE_1ST_TO_END
+        String producerExternalID = "producerExternalID"
+        String serviceFeeAgreementID = "1"
+
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                producerExternalID: producerExternalID,
+                serviceFeeAgreementID: serviceFeeAgreementID,
+                serviceFeeBillingAssignUseType: billingAssignUseType
+        )
+
+        when:
+        producerCompMessageTransformer.validateMessageFields(producerCompProducerDto)
+
+        then:
+        0 * _
+
+        and:
+        UhgRuntimeException uhgRuntimeException = thrown(UhgRuntimeException)
+        uhgRuntimeException.errorVO.globalMessages[0] == MemberGroupMessages.ERR_MISSING_RATE_AMT_OR_RATE_PCT.addMessageArgs(producerExternalID)
+    }
+
+    def 'test createMemGroupContractProducer'() {
+        given:
+        long memGroupID = 101
+        long memGroupContractID = 201
+        long producerID = 301
+        long writingAgentID = 401
+        String billingAssignUseType = ReferenceConstants.PREMIUM_BILLING_PERIOD_TYPE_1ST_TO_END
+        String billingSchedID = "billingSchedID"
+        String billItemType = "Service Fee Arrangements"
+        String compensationType = ReferenceConstants.COMPENSATIONTYPE_SERVICE_FEE
+        String contractOptType = ReferenceConstants.CONTRACTOPTTYPE_MEDICAL
+        String fundingSource = ReferenceConstants.FUNDINGSOURCE_FULLY_INSURED
+        String producerExternalID = 'PRODUCEREXTERNALID'
+        String producerExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PCIS
+        String producerType = ReferenceConstants.PRODUCER_BROKER
+        String productType = ReferenceConstants.PRODUCTTYPE_BENEFIT
+        String rateAmt = "20.00"
+        String serviceFeeAgreementIDString = "501"
+        String serviceFeeBillingType = ReferenceConstants.CODESETTYPE_BILLTYPE
+        String situsState = ReferenceConstants.STATE_CT
+        String writingAgentExternalID = 'WRITINGAGENTEXTERNALID'
+        String writingAgentExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PULSE
+        String effectiveDateString = "2019-01-01"
+        String expirationDateString = "9999-12-31"
+        String pctOfCommissionString = "11.38"
+        boolean commissionInd = true
+
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                commissionInd: commissionInd,
+                effectiveDate: effectiveDateString,
+                expirationDate: expirationDateString,
+                pctOfCommission: pctOfCommissionString,
+                producerExternalID: producerExternalID,
+                producerExternalIDType: producerExternalIDType,
+                producerType: producerType,
+                serviceFeeAgreementID: serviceFeeAgreementIDString,
+                serviceFeeBillingAssignUseType: billingAssignUseType,
+                serviceFeeBillType: serviceFeeBillingType,
+                serviceFeeRateAmt: rateAmt,
+                writingAgentExternalID: writingAgentExternalID,
+                writingAgentExternalIDType: writingAgentExternalIDType
+        )
+        ProducerCompContractProducerDto producerCompContractProducerDto = new ProducerCompContractProducerDto(
+                compensationType: compensationType,
+                contractOptType: contractOptType,
+                fundingSource: fundingSource,
+                producerCompProducers: [producerCompProducerDto],
+                productType: productType,
+                situsState: situsState
+        )
+        ProducerExternalIDVO producerExternalIDVO = new ProducerExternalIDVO(
+                producerID: producerID
+        )
+        ProducerExternalIDVO writingAgentExternalIDVO = new ProducerExternalIDVO(
+                producerID: writingAgentID
+        )
+
+        SysFinSettingVO sysFinSettingVO = new SysFinSettingVO(
+                serviceFeeBillItemType: billItemType
+        )
+
+        when:
+        MemGroupContractProducerVO memGroupContractProducerVO = producerCompMessageTransformer.createMemGroupContractProducer(memGroupID, memGroupContractID, billingSchedID, sysFinSettingVO, producerCompContractProducerDto, producerCompProducerDto)
+
+        then:
+        1 * mockProducerExternalID.read(producerExternalID, producerExternalIDType) >> producerExternalIDVO
+        1 * mockProducerExternalID.read(writingAgentExternalID, writingAgentExternalIDType) >> writingAgentExternalIDVO
+        0 * _
+
+        and:
+        memGroupContractProducerVO
+        !memGroupContractProducerVO.commissionInd
+        !memGroupContractProducerVO.noCommissionInd
+
+    }
+
+    @Unroll
+    def 'test createInheritingMemGroupContractProducer - valid - #scenario'() {
+        given:
+        long memGroupID = 101
+        long owningMemGroupID = 102
+        long memGroupContractID = 201
+        long producerID = 301
+        long writingAgentID = 302
+        String compensationType = ReferenceConstants.COMPENSATIONTYPE_COMMISSION
+        String contractOptType = ReferenceConstants.CONTRACTOPTTYPE_MEDICAL
+        String producerExternalID = 'PRODUCEREXTERNALID'
+        String producerExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PCIS
+        String producerType = ReferenceConstants.PRODUCER_BROKER
+        String productType = ReferenceConstants.PRODUCTTYPE_BENEFIT
+        String writingAgentExternalID = 'WRITINGAGENTEXTERNALID'
+        String writingAgentExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PULSE
+        boolean commissionInd = false
+
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                commissionInd: commissionInd,
+                effectiveDate: dtoEffectiveDate,
+                expirationDate: dtoExpirationDate,
+                pctOfCommission: "11.38",
+                producerExternalID: producerExternalID,
+                producerExternalIDType: producerExternalIDType,
+                producerType: producerType,
+                writingAgentExternalID: writingAgentExternalID,
+                writingAgentExternalIDType: writingAgentExternalIDType
+        )
+        ProducerCompContractProducerDto producerCompContractProducerDto = new ProducerCompContractProducerDto(
+                compensationType: compensationType,
+                contractOptType: contractOptType,
+                producerCompProducers: [producerCompProducerDto],
+                productType: productType
+        )
+        ProducerExternalIDVO producerExternalIDVO = new ProducerExternalIDVO(
+                producerID: producerID
+        )
+        ProducerExternalIDVO writingAgentExternalIDVO = new ProducerExternalIDVO(
+                producerID: writingAgentID
+        )
+        MemGroupContractAffilVO memGroupContractAffilVO = new MemGroupContractAffilVO(
+                memGroupID: memGroupID,
+                owningMemGroupID: owningMemGroupID,
+                memGroupContractID: memGroupContractID,
+                effectiveDate: affilEffectiveDate,
+                expirationDate: affilExpirationDate
+        )
+
+        SysFinSettingVO sysFinSettingVO = new SysFinSettingVO()
+
+        when:
+        MemGroupContractProducerVO memGroupContractProducerVO = producerCompMessageTransformer.createInheritingMemGroupContractProducer(memGroupContractID, null, sysFinSettingVO, producerCompContractProducerDto, producerCompProducerDto, memGroupContractAffilVO)
+
+        then:
+        1 * mockProducerExternalID.read(producerExternalID, producerExternalIDType) >> producerExternalIDVO
+        1 * mockProducerExternalID.read(writingAgentExternalID, writingAgentExternalIDType) >> writingAgentExternalIDVO
+        0 * _
+
+        and:
+        memGroupContractProducerVO.memGroupID == owningMemGroupID
+        memGroupContractProducerVO.affilMemGroupID == memGroupID
+        memGroupContractProducerVO.effectiveDate == effectiveDate
+        memGroupContractProducerVO.expirationDate == expirationDate
+        memGroupContractProducerVO.memGroupContractID == memGroupContractID
+        memGroupContractProducerVO.compensationType == compensationType
+        memGroupContractProducerVO.productType == productType
+        memGroupContractProducerVO.contractOptType == contractOptType
+        !memGroupContractProducerVO.commissionInd
+        !memGroupContractProducerVO.noCommissionInd
+        memGroupContractProducerVO.producerType == producerType
+        memGroupContractProducerVO.producerID == producerID
+        memGroupContractProducerVO.writingAgentID == writingAgentID
+        memGroupContractProducerVO.pctOfCommission == Decimal2.valueOf("11.38")
+        !memGroupContractProducerVO.billingSchedID
+        !memGroupContractProducerVO.billItemType
+        !memGroupContractProducerVO.billingAssignUseType
+        !memGroupContractProducerVO.serviceFeeBillingType
+        !memGroupContractProducerVO.situsState
+        !memGroupContractProducerVO.fundingSource
+        !memGroupContractProducerVO.serviceFeeAgreementID
+
+        where:
+        scenario                             | dtoEffectiveDate | affilEffectiveDate | effectiveDate | dtoExpirationDate | affilExpirationDate | expirationDate
+        "eff date & exp date not set on dto" | null             | jan_01_2013        | jan_01_2013   | null              | dec_31_9999         | dec_31_9999
+        "take affilVO dates"                 | "2013-01-01"     | jan_01_2014        | jan_01_2014   | "9999-12-31"      | dec_31_2014         | dec_31_2014
+        "take dto dates"                     | "2014-01-01"     | jan_01_2013        | jan_01_2014   | "2014-12-31"      | dec_31_9999         | dec_31_2014
+    }
+
+    def 'test createInheritingMemGroupContractProducer - valid - compensation type is service fee'() {
+        given:
+        long memGroupID = 101
+        long owningMemGroupID = 102
+        long memGroupContractID = 201
+        long producerID = 301
+        long writingAgentID = 401
+        long serviceFeeAgreementID = 501
+        String billingAssignUseType = ReferenceConstants.PREMIUM_BILLING_PERIOD_TYPE_1ST_TO_END
+        String billingSchedID = "billingSchedID"
+        String billItemType = "Service Fee Arrangements"
+        String compensationType = ReferenceConstants.COMPENSATIONTYPE_SERVICE_FEE
+        String contractOptType = ReferenceConstants.CONTRACTOPTTYPE_MEDICAL
+        String fundingSource = ReferenceConstants.FUNDINGSOURCE_FULLY_INSURED
+        String producerExternalID = 'PRODUCEREXTERNALID'
+        String producerExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PCIS
+        String producerType = ReferenceConstants.PRODUCER_BROKER
+        String productType = ReferenceConstants.PRODUCTTYPE_BENEFIT
+        String rateAmt = "20.00"
+        String serviceFeeAgreementIDString = "501"
+        String serviceFeeBillingType = ReferenceConstants.CODESETTYPE_BILLTYPE
+        String situsState = ReferenceConstants.STATE_CT
+        String writingAgentExternalID = 'WRITINGAGENTEXTERNALID'
+        String writingAgentExternalIDType = ReferenceConstants.ORIGINALSOURCESYSTEMTYPE_PULSE
+        boolean commissionInd = false
+        Date effectiveDate = jan_01_2013
+        Date expirationDate = dec_31_9999
+
+        ProducerCompProducerDto producerCompProducerDto = new ProducerCompProducerDto(
+                commissionInd: commissionInd,
+                effectiveDate: effectiveDate.toString(),
+                expirationDate: expirationDate.toString(),
+                pctOfCommission: "11.38",
+                producerExternalID: producerExternalID,
+                producerExternalIDType: producerExternalIDType,
+                producerType: producerType,
+                serviceFeeAgreementID: serviceFeeAgreementIDString,
+                serviceFeeBillingAssignUseType: billingAssignUseType,
+                serviceFeeBillType: serviceFeeBillingType,
+                serviceFeeRateAmt: rateAmt,
+                writingAgentExternalID: writingAgentExternalID,
+                writingAgentExternalIDType: writingAgentExternalIDType
+        )
+        ProducerCompContractProducerDto producerCompContractProducerDto = new ProducerCompContractProducerDto(
+                compensationType: compensationType,
+                contractOptType: contractOptType,
+                fundingSource: fundingSource,
+                producerCompProducers: [producerCompProducerDto],
+                productType: productType,
+                situsState: situsState
+        )
+        ProducerExternalIDVO producerExternalIDVO = new ProducerExternalIDVO(
+                producerID: producerID
+        )
+        ProducerExternalIDVO writingAgentExternalIDVO = new ProducerExternalIDVO(
+                producerID: writingAgentID
+        )
+        SysFinSettingVO sysFinSettingVO = new SysFinSettingVO(
+                serviceFeeBillItemType: billItemType
+        )
+        MemGroupContractAffilVO memGroupContractAffilVO = new MemGroupContractAffilVO(
+                memGroupID: memGroupID,
+                owningMemGroupID: owningMemGroupID,
+                memGroupContractID: memGroupContractID,
+                effectiveDate: effectiveDate,
+                expirationDate: expirationDate
+        )
+
+        when:
+        MemGroupContractProducerVO memGroupContractProducerVO = producerCompMessageTransformer.createInheritingMemGroupContractProducer(memGroupContractID, billingSchedID, sysFinSettingVO, producerCompContractProducerDto, producerCompProducerDto, memGroupContractAffilVO)
+
+        then:
+        1 * mockProducerExternalID.read(producerExternalID, producerExternalIDType) >> producerExternalIDVO
+        1 * mockProducerExternalID.read(writingAgentExternalID, writingAgentExternalIDType) >> writingAgentExternalIDVO
+        0 * _
+
+        and:
+        memGroupContractProducerVO.memGroupID == owningMemGroupID
+        memGroupContractProducerVO.affilMemGroupID == memGroupID
+        memGroupContractProducerVO.memGroupContractID == memGroupContractID
+        memGroupContractProducerVO.compensationType == compensationType
+        memGroupContractProducerVO.productType == productType
+        memGroupContractProducerVO.contractOptType == contractOptType
+        !memGroupContractProducerVO.commissionInd
+        !memGroupContractProducerVO.noCommissionInd
+        memGroupContractProducerVO.producerType == producerType
+        memGroupContractProducerVO.producerID == producerID
+        memGroupContractProducerVO.writingAgentID == writingAgentID
+        memGroupContractProducerVO.effectiveDate == effectiveDate
+        memGroupContractProducerVO.expirationDate == expirationDate
+        memGroupContractProducerVO.pctOfCommission == Decimal2.valueOf("11.38")
+        memGroupContractProducerVO.billingSchedID == billingSchedID
+        memGroupContractProducerVO.billItemType == billItemType
+        memGroupContractProducerVO.billingAssignUseType == billingAssignUseType
+        memGroupContractProducerVO.serviceFeeBillingType == serviceFeeBillingType
+        memGroupContractProducerVO.situsState == situsState
+        memGroupContractProducerVO.fundingSource == fundingSource
+        memGroupContractProducerVO.serviceFeeAgreementID == serviceFeeAgreementID
+    }
+}
