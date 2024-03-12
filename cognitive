@@ -1,0 +1,383 @@
+import React, {useEffect, useState} from "react";
+import {Card, Col, Form, Modal, notification, Row, Select, Table} from "antd";
+import {DEFAULT_FORM_GUTTER_X, DEFAULT_FORM_GUTTER_Y, DEFAULT_MODAL_WIDTH, ERROR, FETCH, GET_MEMBER_DETAILS, RESET, SUCCESS} from "../../../../constants";
+import {useAppDispatch} from "../../../../hooks";
+import {useSelector} from "react-redux";
+import {RootState} from "../../../../store";
+import {ColumnsType} from "antd/es/table";
+import _ from 'lodash';
+import axios from "axios";
+
+interface Props {
+    selectedEnrollEditQueueID: any,
+    setSelectedEnrollEditQueueID: Function
+}
+
+interface DataType {
+    key: string,
+    submittedData: any;
+    nodeData: any;
+    submittedName: string;
+    expandable: boolean;
+}
+
+const MemberDetailsPopup: React.FC<Props> = ({
+                                                 selectedEnrollEditQueueID = undefined,
+                                                 setSelectedEnrollEditQueueID = (enrollEditQueueID: any) => {
+                                                 },
+                                             }) => {
+
+    const NOT_DEFINED = 'No records found';
+    const MAX_ITEMS_PER_ROW = 3;
+    const ITEM_COLUMN_SIZE = 24 / MAX_ITEMS_PER_ROW;
+
+    const [enrollmentOptions, setEnrollmentOptions] = useState<any>([]);
+    const [selectedEnrollmentType, setSelectedEnrollmentType] = useState<string>('');
+    const [payloadFound, setPayloadFound] = useState(false)
+    const memberDetailsData = useSelector((state: RootState) => state.memberDetailSearch.memberDetails);
+    const [showModalToUser,setShowModalToUser] = useState<Boolean>(true)
+
+    const dispatch = useAppDispatch();
+
+    useEffect(() => {
+        console.log('selectedEnrollEditQueueID : ', selectedEnrollEditQueueID);
+        if (selectedEnrollEditQueueID) {
+            // Make an API CALL
+            let url = `/cirrus/v1.0/errorQueue/getSubmittedData/${selectedEnrollEditQueueID}`;
+            dispatch({
+                type: GET_MEMBER_DETAILS,
+                subtype: FETCH
+            });
+            axios.get(url).then(response => {
+                console.log('test : ', response.status, ':', response);
+                if (typeof response.data === 'string' && response.data.includes("permission")) {
+                    throw new Error("AccessDenied");
+                }
+                if (response.status === 200){
+                    if(!response.data.memGroupID) {
+                        setShowModalToUser(false);
+                        notification.error({
+                            message: 'Payload cannot be accessed at this time.',
+                            description: 'If this is a recent error or warning, please retry later.'
+                        });
+                    } else{
+                        setShowModalToUser(true);
+                        setPayloadFound(true)
+                        dispatch({
+                            type: GET_MEMBER_DETAILS,
+                            subtype: SUCCESS,
+                            data: response.data
+                        });
+                    }
+                }
+            }).catch(error => {
+                if (error.message === "AccessDenied") {
+                    console.log("Access Denied!")
+                    notification.error({
+                        message: 'You are not authorized to perform the requested function.',
+                        description: 'If you feel this is an error, contact your manager/supervisor to adjust your security privileges.'
+                    });
+                } else if (error.message === "Network Error") {
+                    console.log("Network Error", error)
+                    notification.error({
+                        message: 'Application timed out.',
+                        description: 'Please retry. If issue continues, contact IT support.'
+                    });
+                } else {
+                    notification.error({
+                        message: 'Failed To Retrieve Records',
+                        description: `Please try again later : ${error}`
+                    });
+                    dispatch({
+                        type: GET_MEMBER_DETAILS, subtype: ERROR, error: error
+                    });
+                }
+            });
+            // }).then(response => {
+            //         dispatch({
+            //             type: GET_MEMBER_DETAILS,
+            //             subtype: SUCCESS,
+            //             data: response.data
+            //         });
+            //     })
+            //     .catch(error => {
+            //         dispatch({
+            //             type: GET_MEMBER_DETAILS, subtype: ERROR, error: error
+            //         });
+            //     });
+
+        }
+    }, [selectedEnrollEditQueueID]);
+
+    const getJsonValueFromKeys = (key: string, data: any) => {
+        const keys = key.split('.');
+
+        let subData: any = data;
+        if (keys.length === 1) {
+
+            subData = subData[key];
+
+        } else {
+
+            keys.forEach((ob) => subData = subData[ob]);
+
+        }
+        return subData;
+    }
+
+    const getKeysAsObject = (key: string, data: any, dropDownArray: any = []) => {
+        if (!key) {
+            return;
+        }
+        const keys = key.split('.');
+
+        let subData: any = data;
+
+        keys.forEach((ob) => subData = subData[ob]);
+
+        if (!_.isObject(subData)) {
+            if (keys.length === 1) {
+                dropDownArray.push({label: capitalizeFirstLetter(keys[keys.length - 1]), value: key});
+            }
+            return;
+        }
+
+        dropDownArray.push({label: capitalizeFirstLetter(keys[keys.length - 1]), value: key});
+        if (_.isArray(subData)) {
+            Object.keys(subData).forEach((subkey) => {
+                if (_.isObject(subData[subkey])) {
+                    if (_.isArray(subData[subkey])) {
+                        getKeysAsObject(`${key}.${subkey}`, data, dropDownArray);
+                    } else {
+                        Object.keys(subData[subkey]).filter((nsubKey) => _.isObject(subData[subkey][nsubKey])).forEach((nsubkey) => {
+                            getKeysAsObject(`${key}.${subkey}.${nsubkey}`, data, dropDownArray);
+                        });
+                    }
+                }
+            });
+        } else {
+           Object.keys(subData).forEach((subkey) => {
+                           getKeysAsObject(`${key}.${subkey}`, data, dropDownArray);
+                       });
+        }
+    }
+
+    const capitalizeFirstLetter = (value: String) => {
+        return value[0].toUpperCase() + value.slice(1);
+    }
+
+    useEffect(() => {
+        const dropDownArray: any = [];
+        if (memberDetailsData && memberDetailsData.payload) {
+            Object.keys(memberDetailsData.payload).forEach((key) => {
+                getKeysAsObject(key, memberDetailsData.payload, dropDownArray);
+            });
+            setEnrollmentOptions(dropDownArray);
+        }
+    }, [memberDetailsData]);
+
+
+    const columns: ColumnsType<any> = [
+        {title: 'Submitted Field Name', dataIndex: 'submittedName', key: 'submittedName'},
+        {title: 'Submitted Data', dataIndex: 'submittedData', key: 'submittedData'}
+        //,
+        //{ title: 'Error / Warning Message', dataIndex: 'errorMessage', key: 'errorMessage' }
+    ];
+
+
+    const columnForNodes: ColumnsType<any> = [
+        {title: 'Child Nodes', dataIndex: 'submittedName', key: 'submittedName'}
+    ];
+    console.log('enrollmentOptions', enrollmentOptions)
+    const getData = () => {
+
+        if (!selectedEnrollmentType || !memberDetailsData?.payload) {
+            return [];
+        }
+
+        console.log("selectedEnrollmentType", selectedEnrollmentType);
+
+        const selectedEnrollmentData = getJsonValueFromKeys(selectedEnrollmentType, memberDetailsData.payload);
+        console.log("selectedEnrollmentData", selectedEnrollmentData);
+        const data: DataType[] = [];
+        const isArray = _.isArray(selectedEnrollmentData);
+        console.log("isArray", isArray);
+        if (!isArray) {
+            const isExpandable = selectedEnrollmentData instanceof Object;
+            const name = selectedEnrollmentType;
+
+            data.push({
+                key: name,
+                submittedName: name,
+                submittedData: `${!isExpandable ? selectedEnrollmentData : ''}`,
+                nodeData: selectedEnrollmentData,
+                expandable: isExpandable
+            });
+
+        } else {
+            populateArrayData(selectedEnrollmentData, isArray, selectedEnrollmentType, data);
+
+        }
+
+        console.log("data", data);
+        return {data, columns: isArray ? [columnForNodes[0]] : [...columns]};
+    }
+
+    function populateArrayData(selectedEnrollmentData: any, isArray: boolean, selectedEnrollmentType: string, data: DataType[]) {
+        Object.keys(selectedEnrollmentData).forEach((key: any) => {
+
+            if (!_.isObject(selectedEnrollmentData[key]) || isArray) {
+                const isExpandable = selectedEnrollmentData[key] instanceof Object;
+                const name = isArray ? `${selectedEnrollmentType} - ${key}` : key;
+
+                data.push({
+                    key: name,
+                    submittedName: name,
+                    submittedData: `${!isExpandable ? selectedEnrollmentData[key] : ''}`,
+                    nodeData: selectedEnrollmentData[key],
+                    expandable: isExpandable
+                });
+            }
+        });
+    }
+
+    const getDataBasedOnNode = (record: DataType) => {
+        if (!record) {
+            return [];
+        }
+        const data: DataType[] = [];
+        const val = record.nodeData;
+        const isArray = _.isArray(val);
+        Object.keys(val).forEach((key) => {
+            if (!_.isObject(val[key]) || isArray) {
+                const isExpandable = val[key] instanceof Object;
+                const name = isArray ? `${record.submittedName} - ${key}` : key;
+                data.push({
+                    key: name,
+                    submittedName: name,
+                    submittedData: `${!isExpandable ? val[key] : ''}`,
+                    nodeData: val[key],
+                    expandable: isExpandable
+                });
+            }
+        });
+
+        return {data, columns: isArray ? [columns[0]] : [...columns]};
+    };
+
+    const handleChange = (value: string) => {
+        setSelectedEnrollmentType(value);
+    };
+
+    const GenerateSubTable = ({data = [], columns = []}: any) => {
+        return (
+            <Table
+                pagination={false}
+                showHeader={false}
+                size='small'
+                scroll={{
+                    x: 1600,
+                    y: 500
+                }}
+                columns={columns}
+                dataSource={data}
+            />
+        );
+    }
+
+    const GenerateTable = ({data = [], columns = []}: any) => {
+        return (
+            <Table
+                defaultExpandAllRows={true}
+                pagination={false}
+                showHeader={true}
+                size='small'
+                locale={{
+                    emptyText: "No records found"
+                }}
+                scroll={{
+                    x: 1600,
+                    y: 500
+                }}
+                columns={columns}
+                expandable={{
+                  expandIcon: () => null,
+                  expandIconColumnIndex: -1,
+                  expandedRowRender: record => {
+                      return (<GenerateSubTable className='sub-table'
+                                             {...getDataBasedOnNode(record)}
+                      />);
+                  },
+                  rowExpandable: record => record.expandable,
+                }}
+                dataSource={data}
+            />
+        );
+    }
+
+    return (
+        <div>
+        { showModalToUser &&
+    <Modal title='Submitted Member Data'
+           visible={selectedEnrollEditQueueID}
+           width={DEFAULT_MODAL_WIDTH}
+           closable
+           footer={null}
+           onCancel={() => {
+               dispatch({
+                   type: GET_MEMBER_DETAILS,
+                   subtype: RESET
+               });
+               setSelectedEnrollEditQueueID(undefined)
+           }}
+           data-testid={'MemberDetails'}>
+        <Card>
+            <Form layout='vertical'>
+                <Row gutter={[DEFAULT_FORM_GUTTER_X, DEFAULT_FORM_GUTTER_Y]}>
+                    <Col span={ITEM_COLUMN_SIZE}>
+                        <Form.Item label='Member Group'>
+                            <span>{memberDetailsData?.memGroupName || NOT_DEFINED}</span>
+                        </Form.Item>
+                    </Col>
+                    <Col span={ITEM_COLUMN_SIZE}>
+                        <Form.Item label='Received Date'>
+                            <span>{memberDetailsData?.receivedDate || NOT_DEFINED}</span>
+                        </Form.Item>
+                    </Col>
+                    <Col span={ITEM_COLUMN_SIZE}>
+                        <Form.Item label='Member'>
+                            <span>{memberDetailsData?.memberName || NOT_DEFINED}</span>
+                        </Form.Item>
+                    </Col>
+
+                </Row>
+                <Row gutter={[DEFAULT_FORM_GUTTER_X, DEFAULT_FORM_GUTTER_Y]}>
+                    <Col span={24}>
+                        <Form.Item label='Error/Warning Message :'>
+
+                            <span>{memberDetailsData?.messageCode ? (`${memberDetailsData?.messageCode} - ${memberDetailsData?.messageDescription}`) : NOT_DEFINED}</span>
+                        </Form.Item>
+                    </Col>
+                </Row>
+                <Row gutter={[DEFAULT_FORM_GUTTER_X, DEFAULT_FORM_GUTTER_Y]}>
+                    <Col span={ITEM_COLUMN_SIZE}>
+                        <Form.Item name="enrollment" label="Enrollment File Segment">
+                            <Select allowClear options={enrollmentOptions} onChange={handleChange}/>
+                        </Form.Item>
+
+                    </Col>
+                </Row>
+            </Form>
+        </Card>
+        <Card className='mt20'>
+            <GenerateTable
+                {...getData()}
+            />
+        </Card>
+    </Modal>
+}
+        </div>
+    );
+}
+
+export default MemberDetailsPopup;
